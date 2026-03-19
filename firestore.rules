@@ -1,0 +1,332 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function currentUid() {
+      return request.auth.uid;
+    }
+
+    function orgId() {
+      return request.auth.token.orgId;
+    }
+
+    function membershipPath(organizationId) {
+      return /databases/$(database)/documents/organizationMemberships/$(organizationId + '_' + currentUid());
+    }
+
+    function isActiveMember(organizationId) {
+      return isSignedIn()
+        && orgId() == organizationId
+        && exists(membershipPath(organizationId))
+        && get(membershipPath(organizationId)).data.active == true;
+    }
+
+    function role() {
+      return request.auth.token.role;
+    }
+
+    function isAdmin(organizationId) {
+      return isActiveMember(organizationId) && role() == 'admin';
+    }
+
+    function isStaff(organizationId) {
+      return isActiveMember(organizationId) && (role() == 'staff' || role() == 'admin');
+    }
+
+    function isParticipant(organizationId) {
+      return isActiveMember(organizationId) && role() == 'participant';
+    }
+
+    function docOrganizationId() {
+      return resource.data.organizationId != null ? resource.data.organizationId : resource.data.orgId;
+    }
+
+    function requestOrganizationId() {
+      return request.resource.data.organizationId != null ? request.resource.data.organizationId : request.resource.data.orgId;
+    }
+
+    function tenantMatch(organizationId) {
+      return requestOrganizationId() == organizationId;
+    }
+
+    function immutableFieldsUnchanged() {
+      return request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // ---- Global (no tenant) ----
+    match /profiles/{uid} {
+      allow read, write: if isSignedIn() && uid == currentUid();
+    }
+
+    // ---- Core ----
+    match /organizations/{organizationId} {
+      allow read: if isActiveMember(organizationId);
+      allow create: if isAdmin(organizationId) && tenantMatch(organizationId);
+      allow update, delete: if isAdmin(organizationId) && immutableFieldsUnchanged();
+    }
+
+    match /organizationMemberships/{membershipId} {
+      allow read: if isSignedIn()
+        && (membershipId == orgId() + '_' + currentUid() || isAdmin(orgId()));
+      allow create, update, delete: if isAdmin(request.resource.data.organizationId);
+    }
+
+    match /roles/{roleId} {
+      allow read: if isActiveMember(resource.data.organizationId);
+      allow write: if isAdmin(resource.data.organizationId);
+    }
+
+    // ---- Tenant-scoped: admin and staff full access; participant limited ----
+    match /families/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familyMembers/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /participantProfiles/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /intakes/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /enrollments/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /assessments/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /staffAssignments/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /interactions/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /notes/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /resources/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /resourceCategories/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familyResourceAssignments/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /referrals/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /requiredDocumentTemplates/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familyDocuments/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familyDocumentRequirements/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /uploadRequests/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /reminders/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && (
+        request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.createdAt == resource.data.createdAt
+      );
+    }
+
+    match /staffActionPrompts/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && (
+        request.resource.data.organizationId == resource.data.organizationId
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.createdAt == resource.data.createdAt
+      );
+    }
+
+    match /escalationEvents/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /surveys/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /surveyResponses/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isActiveMember(requestOrganizationId()) && tenantMatch(orgId()) && (
+        isStaff(orgId()) ||
+        (isParticipant(orgId()) && request.resource.data.respondentUid == currentUid())
+      );
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /outcomeMetrics/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /outcomeSnapshots/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /schools/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isAdmin(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isAdmin(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /partnerOrganizations/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isAdmin(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isAdmin(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familySchoolLinks/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /familyPartnerLinks/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /staffWeeklyAgendas/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /staffWeeklyReports/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /staffScheduleEntries/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /staffTimesheetSummaries/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /adminReportExports/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isAdmin(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isAdmin(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /organizationMetricsSnapshots/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /auditLogs/{docId} {
+      allow read: if isActiveMember(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if false;
+    }
+
+    // ---- Subcollections ----
+    match /families/{familyId}/goals/{goalId} {
+      allow read: if isActiveMember(resource.data.organizationId);
+      allow create: if isStaff(request.resource.data.organizationId) && request.resource.data.organizationId == orgId();
+      allow update, delete: if isStaff(resource.data.organizationId) && immutableFieldsUnchanged();
+    }
+
+    match /families/{familyId}/goals/{goalId}/goalTasks/{taskId} {
+      allow read: if isActiveMember(resource.data.organizationId);
+      allow create: if isStaff(request.resource.data.organizationId) && request.resource.data.organizationId == orgId();
+      allow update, delete: if isStaff(resource.data.organizationId) && immutableFieldsUnchanged();
+    }
+
+    match /surveys/{surveyId}/surveyQuestions/{questionId} {
+      allow read: if isActiveMember(resource.data.organizationId);
+      allow create: if isStaff(request.resource.data.organizationId) && request.resource.data.organizationId == orgId();
+      allow update, delete: if isStaff(resource.data.organizationId) && immutableFieldsUnchanged();
+    }
+
+    match /staffWeeklyReports/{reportId}/staffReportItems/{itemId} {
+      allow read: if isActiveMember(resource.data.organizationId);
+      allow create: if isStaff(request.resource.data.organizationId) && request.resource.data.organizationId == orgId();
+      allow update, delete: if isStaff(resource.data.organizationId) && immutableFieldsUnchanged();
+    }
+  }
+}

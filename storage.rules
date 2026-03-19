@@ -1,0 +1,38 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function orgId() {
+      return request.auth.token.orgId;
+    }
+
+    function hasOrgClaim(organizationId) {
+      return orgId() == organizationId;
+    }
+
+    function isStaffOrAdmin() {
+      return request.auth.token.role in ['admin', 'staff'];
+    }
+
+    function isParticipant() {
+      return request.auth.token.role == 'participant';
+    }
+
+    // Org-scoped: all authenticated org members can read; only staff/admin can write
+    // Path: organizations/{organizationId}/... (includes families/{familyId}/documents/{documentId}/{fileName})
+    match /organizations/{organizationId}/{allPaths=**} {
+      allow read: if isSignedIn() && hasOrgClaim(organizationId);
+      allow write: if isSignedIn() && hasOrgClaim(organizationId) && isStaffOrAdmin();
+    }
+
+    // Legacy path (Phase 2): orgs/{orgId}/...
+    match /orgs/{orgId}/{allPaths=**} {
+      allow read: if isSignedIn() && hasOrgClaim(orgId) && (isStaffOrAdmin() || isParticipant());
+      allow write: if isSignedIn() && hasOrgClaim(orgId) && isStaffOrAdmin();
+    }
+  }
+}

@@ -1,0 +1,37 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+functions/node_modules/
+
+# Next.js
+.next/
+out/
+dist/
+functions/lib/
+
+# editor
+.vscode
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# Expo / misc caches
+.expo/
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files (keep .env.example tracked)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# typescript
+*.tsbuildinfo
+

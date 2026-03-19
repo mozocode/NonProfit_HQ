@@ -1,0 +1,121 @@
+{
+  "organizations": [
+    {
+      "id": "org_demo",
+      "orgId": "org_demo",
+      "name": "Demo Nonprofit Org",
+      "status": "active",
+      "settings": {
+        "timezone": "America/New_York"
+      },
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "users": [
+    {
+      "id": "admin_user",
+      "displayName": "Org Admin",
+      "email": "admin@nonprofithq.org",
+      "phone": null,
+      "lastActiveAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "staff_user",
+      "displayName": "Case Staff",
+      "email": "staff@nonprofithq.org",
+      "phone": null,
+      "lastActiveAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "participant_user",
+      "displayName": "Program Participant",
+      "email": "participant@nonprofithq.org",
+      "phone": null,
+      "lastActiveAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "orgUsers": [
+    {
+      "id": "org_demo_admin_user",
+      "orgId": "org_demo",
+      "uid": "admin_user",
+      "role": "admin",
+      "programIds": [],
+      "active": true,
+      "invitedBy": null,
+      "joinedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "org_demo_staff_user",
+      "orgId": "org_demo",
+      "uid": "staff_user",
+      "role": "staff",
+      "programIds": [
+        "program_youth_services"
+      ],
+      "active": true,
+      "invitedBy": "admin_user",
+      "joinedAt": "2026-01-01T00:00:00.000Z"
+    },
+    {
+      "id": "org_demo_participant_user",
+      "orgId": "org_demo",
+      "uid": "participant_user",
+      "role": "participant",
+      "programIds": [
+        "program_youth_services"
+      ],
+      "active": true,
+      "invitedBy": "admin_user",
+      "joinedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "families": [
+    {
+      "id": "family_rivera",
+      "familyId": "family_rivera",
+      "orgId": "org_demo",
+      "primaryContact": {
+        "firstName": "Elena",
+        "lastName": "Rivera",
+        "phone": "555-1001",
+        "email": "elena.rivera@example.org"
+      },
+      "status": "active",
+      "schoolId": "school_central",
+      "partnerOrgId": "partner_housing",
+      "createdBy": "staff_user",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "cases": [
+    {
+      "id": "case_rivera_intake",
+      "caseId": "case_rivera_intake",
+      "orgId": "org_demo",
+      "familyId": "family_rivera",
+      "assignedStaffUid": "staff_user",
+      "programId": "program_youth_services",
+      "stage": "intake",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "task_collect_docs",
+      "taskId": "task_collect_docs",
+      "orgId": "org_demo",
+      "caseId": "case_rivera_intake",
+      "goalId": null,
+      "assignedToUid": "staff_user",
+      "title": "Collect enrollment documents",
+      "status": "todo",
+      "dueDate": "2026-01-08T00:00:00.000Z",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ]
+}

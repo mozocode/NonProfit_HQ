@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 173 84% 32%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 173 84% 32%;
+    --radius: 0.5rem;
+
+    /* Design system: status (for chips/badges) */
+    --status-success: 142 71% 45%;
+    --status-success-muted: 142 40% 94%;
+    --status-warning: 38 92% 50%;
+    --status-warning-muted: 48 96% 89%;
+    --status-error: 0 84% 60%;
+    --status-error-muted: 0 93% 94%;
+    --status-info: 199 89% 48%;
+    --status-info-muted: 204 94% 94%;
+    --status-neutral: 215 16% 47%;
+    --status-neutral-muted: 210 40% 96%;
+
+    /* Spacing (align with Tailwind) */
+    --page-padding-x: 1.5rem;
+    --section-gap: 1.5rem;
+    --card-padding: 1.5rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
