@@ -95,6 +95,12 @@ This script:
 
 Script source: **`functions/scripts/bootstrapFirstAdmin.cjs`**.
 
+**If bootstrap fails with `Cloud Firestore API has not been used` / `SERVICE_DISABLED`:**
+
+1. Create a Firestore database if you have not: Firebase Console → **Build → Firestore Database** → **Create database** (choose a mode and region). That enables the API for the project.
+2. Or enable the API directly: [Enable Cloud Firestore API for `nonprofithq`](https://console.developers.google.com/apis/api/firestore.googleapis.com/overview?project=nonprofithq) → **Enable**.
+3. Wait 1–2 minutes, then run `npm run bootstrap-admin` again.
+
 ### Additional users (after you have an admin)
 
 Use the callable **`setOrgUserClaims`** from the app (admin-only) or Admin SDK, with Auth user + membership doc as documented in `functions/src/index.ts`.
