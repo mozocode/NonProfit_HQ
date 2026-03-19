@@ -128,19 +128,19 @@ function SheetContent({
   );
 }
 
-export interface SheetHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type SheetHeaderProps = React.HTMLAttributes<HTMLDivElement>;
 
 function SheetHeader({ className, ...props }: SheetHeaderProps) {
   return <div className={cn("flex flex-col space-y-1.5", className)} {...props} />;
 }
 
-export interface SheetTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
+export type SheetTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
 
 function SheetTitle({ className, ...props }: SheetTitleProps) {
   return <h2 className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />;
 }
 
-export interface SheetDescriptionProps extends React.HTMLAttributes<HTMLParagraphElement> {}
+export type SheetDescriptionProps = React.HTMLAttributes<HTMLParagraphElement>;
 
 function SheetDescription({ className, ...props }: SheetDescriptionProps) {
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;

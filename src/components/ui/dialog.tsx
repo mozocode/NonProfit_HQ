@@ -135,13 +135,13 @@ function DialogContent({
   );
 }
 
-export interface DialogHeaderProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type DialogHeaderProps = React.HTMLAttributes<HTMLDivElement>;
 
 function DialogHeader({ className, ...props }: DialogHeaderProps) {
   return <div className={cn("flex flex-col space-y-1.5 text-center sm:text-left", className)} {...props} />;
 }
 
-export interface DialogFooterProps extends React.HTMLAttributes<HTMLDivElement> {}
+export type DialogFooterProps = React.HTMLAttributes<HTMLDivElement>;
 
 function DialogFooter({ className, ...props }: DialogFooterProps) {
   return (
@@ -152,13 +152,13 @@ function DialogFooter({ className, ...props }: DialogFooterProps) {
   );
 }
 
-export interface DialogTitleProps extends React.HTMLAttributes<HTMLHeadingElement> {}
+export type DialogTitleProps = React.HTMLAttributes<HTMLHeadingElement>;
 
 function DialogTitle({ className, ...props }: DialogTitleProps) {
   return <h2 className={cn("text-lg font-semibold leading-none tracking-tight", className)} {...props} />;
 }
 
-export interface DialogDescriptionProps extends React.HTMLAttributes<HTMLParagraphElement> {}
+export type DialogDescriptionProps = React.HTMLAttributes<HTMLParagraphElement>;
 
 function DialogDescription({ className, ...props }: DialogDescriptionProps) {
   return <p className={cn("text-sm text-muted-foreground", className)} {...props} />;

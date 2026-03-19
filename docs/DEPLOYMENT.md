@@ -2,13 +2,20 @@
 
 ## Hosting the Next.js app
 
-This repo is a standard **Next.js 15** app. Common options:
+This repo is a standard **Next.js 15** app. **Production for project `nonprofithq` uses [Firebase App Hosting](https://firebase.google.com/docs/app-hosting)** (GitHub-connected builds in Google Cloud).
 
 | Platform | Notes |
 |----------|--------|
-| **Vercel** | Connect Git repo; set `NEXT_PUBLIC_FIREBASE_*` in Project → Environment Variables for Production/Preview. |
-| **Firebase App Hosting** | Native Firebase integration; same env vars. |
+| **Firebase App Hosting** (production) | Connect repo in Console; set `NEXT_PUBLIC_FIREBASE_*` on the App Hosting backend; deploy on push to the linked branch. |
+| **Vercel** | Alternative: connect Git repo; set env in Project → Environment Variables. |
 | **Node server** | `npm run build && npm run start`; inject env at runtime. |
+
+**Live URLs (same default Hosting site):**
+
+- **Primary:** [https://nonprofithq.firebaseapp.com](https://nonprofithq.firebaseapp.com/)
+- **Alternate:** [https://nonprofithq.web.app](https://nonprofithq.web.app/)
+
+**Console:** [Hosting — site `nonprofithq`](https://console.firebase.google.com/project/nonprofithq/hosting/sites/nonprofithq)
 
 Always set **all** Firebase web config variables for the target project. Never commit `.env.local`.
 
@@ -20,6 +27,51 @@ Install [Firebase CLI](https://firebase.google.com/docs/cli) and login:
 firebase login
 firebase use <your-project-id>
 ```
+
+This repo includes **`.firebaserc`** with default project **`nonprofithq`**.
+
+## Firebase App Hosting (recommended — production)
+
+1. In [Firebase Console](https://console.firebase.google.com/project/nonprofithq/hosting) → **App Hosting**, connect this GitHub repository and select the production branch.
+2. Configure **environment variables** on the backend (all `NEXT_PUBLIC_FIREBASE_*` from `.env.example` / Firebase Web app config).
+3. Merging or pushing to the connected branch triggers **Cloud Build** and rolls out to **`https://nonprofithq.firebaseapp.com`** (and `https://nonprofithq.web.app`).
+
+See [Firebase App Hosting](https://firebase.google.com/docs/app-hosting) for rollouts, secrets, and custom domains.
+
+> **Billing:** App Hosting / SSR typically requires the **Blaze** plan.
+
+## Optional: manual deploy via Firebase CLI (Hosting + web frameworks)
+
+If you need a **CLI-driven** deploy to the same Firebase project (instead of or in addition to App Hosting’s Git pipeline), this repo includes **`hosting`** in `firebase.json` with a **`frameworksBackend`** (Next.js preview integration — builds SSR via Cloud Functions). This is **not** the same as App Hosting’s managed backend but can target the same Hosting URLs.
+
+**One-time on your machine:**
+
+```bash
+firebase experiments:enable webframeworks
+```
+
+**Before each deploy:** ensure production Firebase web config is available at build time (e.g. `.env.production` or `.env.local` with `NEXT_PUBLIC_FIREBASE_*` for project `nonprofithq`).
+
+```bash
+npm run deploy:hosting
+# or: firebase deploy --only hosting --project nonprofithq
+```
+
+Docs: [Next.js on Firebase Hosting (frameworks)](https://firebase.google.com/docs/hosting/frameworks/nextjs).
+
+### Troubleshooting: 404 on `/` (firebaseapp.com / web.app)
+
+**Symptom:** The Hosting URL loads but every path (including `/`) returns **404**.
+
+**Common cause:** Next.js resolves the App Router from **`app/` at the repo root first**, then falls back to **`src/app`**. An **empty or stub `app/`** folder (no `layout.tsx` / `page.tsx`) makes the production build ship almost no routes—only static fallbacks—so Hosting has nothing to serve for `/`.
+
+**Fix:**
+
+1. **Remove** a stray root-level `app/` directory if your real routes live under **`src/app/`** (this repo’s pages are in `src/app/` only).
+2. Run **`npm run build`** locally and confirm the route list includes `/`, `/login`, `/admin`, etc.
+3. **Redeploy** (push to the App Hosting–linked branch, or `npm run deploy:hosting` after `firebase experiments:enable webframeworks`).
+
+**Also check:** App Hosting **build logs** in Google Cloud Console for a failed `next build`; a failed build can leave the previous broken version live.
 
 ## Firestore indexes
 

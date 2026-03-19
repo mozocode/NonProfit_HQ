@@ -7,6 +7,9 @@ functions/node_modules/
 # Next.js
 .next/
 out/
+
+# Firebase CLI local deploy cache
+.firebase/
 dist/
 functions/lib/
 

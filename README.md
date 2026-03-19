@@ -56,14 +56,16 @@ cd functions && npm install && npm run build
 
 ## Deployment notes
 
+**Production web:** [Firebase App Hosting](https://firebase.google.com/docs/app-hosting) — live app **[https://nonprofithq.firebaseapp.com](https://nonprofithq.firebaseapp.com/)** (paired URL: [nonprofithq.web.app](https://nonprofithq.web.app/)). Configure the linked GitHub repo and env vars in [Firebase Hosting / App Hosting](https://console.firebase.google.com/project/nonprofithq/hosting/sites/nonprofithq).
+
 Deploy order of operations (typical):
 
 1. Set **environment variables** on your host (all `NEXT_PUBLIC_FIREBASE_*`).
 2. Deploy **Firestore indexes** → **rules** → **Storage rules**.
 3. Deploy **Cloud Functions** (after `functions` build).
-4. Deploy **Next.js** (Vercel, Firebase App Hosting, or Node).
+4. Deploy **Next.js** (for this project: **Firebase App Hosting** on git push; optional CLI — see below).
 
-Detailed checklist: **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)**
+Detailed checklist: **[docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)** (includes optional `npm run deploy:hosting` for CLI-based Hosting deploys).
 
 ## Admin Command Center
 

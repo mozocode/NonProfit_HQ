@@ -53,6 +53,7 @@ Other scripts:
 3. Create a **Firestore** database (production mode, then deploy rules from repo).
 4. Enable **Storage** and deploy `storage.rules` from repo.
 5. Register a **Web app** and copy config into `.env.local`.
+6. For **production** Next.js deploys, use **[Firebase App Hosting](https://firebase.google.com/docs/app-hosting)** (GitHub-linked). The default public URL for project `nonprofithq` is **[https://nonprofithq.firebaseapp.com](https://nonprofithq.firebaseapp.com/)** (see [Hosting console](https://console.firebase.google.com/project/nonprofithq/hosting/sites/nonprofithq)).
 
 Detailed deploy steps: [DEPLOYMENT.md](./DEPLOYMENT.md).
 

@@ -6,7 +6,7 @@ import * as React from "react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export interface DatePickerProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {}
+export type DatePickerProps = Omit<React.InputHTMLAttributes<HTMLInputElement>, "type">;
 
 /**
  * Native date input styled to match the design system. For richer calendars

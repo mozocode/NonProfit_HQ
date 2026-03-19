@@ -11,7 +11,8 @@
     "format:write": "prettier --write .",
     "seed:validate": "node --experimental-strip-types scripts/seed/validateSeed.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "deploy:hosting": "firebase deploy --only hosting --project nonprofithq"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

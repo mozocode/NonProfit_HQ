@@ -728,7 +728,7 @@ export async function adminBuildComparisonGrid(
   const db = guardDb();
   const { staff: staffOptions } = await fetchSegmentFilterOptions(organizationId);
   /** When filtering to one uid, include that uid even if missing from segment (deep links / oversight). */
-  let staffList = staffUidFilter
+  const staffList = staffUidFilter
     ? [staffUidFilter]
     : staffOptions.map((s) => s.id);
 

@@ -74,7 +74,7 @@ export async function getRemindersForStaff(
 ): Promise<ReminderView[]> {
   const db = guardDb();
   const ref = collection(db, COLLECTIONS.reminders);
-  let q = query(
+  const q = query(
     ref,
     where("organizationId", "==", organizationId),
     where("assignedToUid", "==", staffUid),
@@ -157,7 +157,7 @@ export async function getStaffPrompts(
 ): Promise<StaffActionPromptView[]> {
   const db = guardDb();
   const ref = collection(db, COLLECTIONS.staffActionPrompts);
-  let q = query(
+  const q = query(
     ref,
     where("organizationId", "==", organizationId),
     where("staffUid", "==", staffUid),
