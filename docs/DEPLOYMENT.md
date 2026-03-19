@@ -46,18 +46,75 @@ If you need a **CLI-driven** deploy to the same Firebase project (instead of or 
 
 **One-time on your machine:**
 
+Use **Node.js 20** (or 22) for deploys — `firebase-frameworks` does not support Node 24 yet; mismatches can cause odd failures. With [nvm](https://github.com/nvm-sh/nvm): `nvm install 20 && nvm use 20` (this repo includes **`.nvmrc`** with `20`).
+
+Enable the web frameworks experiment **on its own line** (no text after the experiment name — inline `# comments` have caused `Too many arguments` with some shells/pastes):
+
 ```bash
 firebase experiments:enable webframeworks
+```
+
+Update the CLI if deploys fail mysteriously:
+
+```bash
+npm install -g firebase-tools
 ```
 
 **Before each deploy:** ensure production Firebase web config is available at build time (e.g. `.env.production` or `.env.local` with `NEXT_PUBLIC_FIREBASE_*` for project `nonprofithq`).
 
 ```bash
 npm run deploy:hosting
-# or: firebase deploy --only hosting --project nonprofithq
+```
+
+Or:
+
+```bash
+firebase deploy --only hosting --project nonprofithq
 ```
 
 Docs: [Next.js on Firebase Hosting (frameworks)](https://firebase.google.com/docs/hosting/frameworks/nextjs).
+
+### Troubleshooting: `Error: Failed to list functions for nonprofithq`
+
+This appears when the CLI tries to deploy or reconcile the **frameworks SSR Cloud Function** and cannot call the Cloud Functions API.
+
+Do the following for Google Cloud project **`nonprofithq`** (same project as Firebase):
+
+1. **Enable APIs** (as a project Owner or Editor):
+   - [Cloud Functions API](https://console.cloud.google.com/apis/library/cloudfunctions.googleapis.com?project=nonprofithq)
+   - [Cloud Build API](https://console.cloud.google.com/apis/library/cloudbuild.googleapis.com?project=nonprofithq) (often required for function deploys)
+2. **Billing:** ensure the project is on the **Blaze** plan if Functions/Hosting SSR require it.
+3. **IAM:** your Google account (`firebase login`) should have at least **Firebase Admin** or roles that include listing/deploying functions (e.g. **Cloud Functions Admin** or **Editor** on the project). Some teams fix this by adding **Cloud Functions Viewer** (list) + deploy role for the account hitting the error.
+4. **Refresh login:** `firebase logout` then `firebase login`, then retry deploy.
+5. **More detail:** `firebase deploy --only hosting --project nonprofithq --debug`
+
+If CLI framework deploys remain blocked, rely on **[Firebase App Hosting](https://firebase.google.com/docs/app-hosting)** (GitHub-connected) for production — it does not use this local “list functions” step the same way.
+
+References: [Stack Overflow — Failed to list functions](https://stackoverflow.com/questions/73976076/firebase-deploy-error-error-failed-to-list-functions-for-project-name), [firebase-tools#5071](https://github.com/firebase/firebase-tools/issues/5071).
+
+### Troubleshooting: `Build failed` — missing permission on the **build service account**
+
+**Symptom:** Deploy reaches `creating Node.js … function … ssrnonprofithq` then fails with:
+
+`Could not build the function due to a missing permission on the build service account`
+
+This is **Google Cloud IAM** for **Cloud Build**, not a bug in this repo. The Cloud Build service account must be allowed to build and publish Gen2 functions.
+
+**Fix (project `nonprofithq` selected):**
+
+1. Open **[Cloud Build → Settings](https://console.cloud.google.com/cloud-build/settings?project=nonprofithq)**.
+2. For the **Cloud Build service account** (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`), enable / grant:
+   - **Cloud Functions** (Developer or Admin, as offered in the UI)
+   - **Service Account User** (so the build can act as the runtime service account)
+   - **Artifact Registry** (writer), if shown separately
+3. Wait ~1 minute, then redeploy:
+   ```bash
+   firebase deploy --only hosting --project nonprofithq
+   ```
+
+**Alternative (IAM page):** [IAM & Admin → IAM](https://console.cloud.google.com/iam-admin/iam?project=nonprofithq) → find `...@cloudbuild.gserviceaccount.com` → add roles **Cloud Functions Developer**, **Service Account User**, **Artifact Registry Writer** if the Settings page is unavailable.
+
+If the project lives under a **Google Workspace organization**, an org admin may need to adjust **organization policies** blocking default build behavior. See Google’s [Cloud Functions troubleshooting — build service account](https://cloud.google.com/functions/docs/troubleshooting#build-service-account).
 
 ### Troubleshooting: 404 on `/` (firebaseapp.com / web.app)
 

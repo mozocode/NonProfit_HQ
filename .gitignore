@@ -10,6 +10,7 @@ out/
 
 # Firebase CLI local deploy cache
 .firebase/
+firebase-debug.log
 dist/
 functions/lib/
 
