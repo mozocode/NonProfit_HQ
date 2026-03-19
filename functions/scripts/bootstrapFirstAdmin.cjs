@@ -17,6 +17,8 @@
  *   GCLOUD_PROJECT          optional; else inferred from credentials
  */
 
+const fs = require("fs");
+const path = require("path");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
 
@@ -24,10 +26,45 @@ const EMAIL = process.env.BOOTSTRAP_ADMIN_EMAIL || "mozodevelopment@gmail.com";
 const ORG_ID = process.env.BOOTSTRAP_ORG_ID || "org_demo";
 const ORG_NAME = process.env.BOOTSTRAP_ORG_NAME || "NonProfit HQ";
 
-async function main() {
-  if (!admin.apps.length) {
-    admin.initializeApp();
+function initAdmin() {
+  if (admin.apps.length) return;
+
+  const credPathRaw = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+  const projectOverride = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT;
+
+  if (credPathRaw) {
+    const credPath = path.resolve(credPathRaw.replace(/^["']|["']$/g, ""));
+    if (!fs.existsSync(credPath)) {
+      console.error("GOOGLE_APPLICATION_CREDENTIALS points to a file that does not exist:");
+      console.error("  ", credPath);
+      console.error("");
+      console.error("Use the real path to the JSON key from:");
+      console.error("  Firebase Console → Project settings → Service accounts → Generate new private key");
+      console.error("Example:");
+      console.error('  export GOOGLE_APPLICATION_CREDENTIALS="$HOME/Downloads/nonprofithq-xxxxx.json"');
+      process.exit(1);
+    }
+    const sa = JSON.parse(fs.readFileSync(credPath, "utf8"));
+    const projectId = projectOverride || sa.project_id;
+    admin.initializeApp({
+      credential: admin.credential.cert(sa),
+      projectId,
+    });
+    console.log("Firebase Admin using project:", projectId, "(from service account JSON)\n");
+    return;
   }
+
+  console.warn(
+    "GOOGLE_APPLICATION_CREDENTIALS is not set — using Application Default Credentials.",
+  );
+  console.warn("If the wrong Google account is active, Auth may query a different project.\n");
+  admin.initializeApp({
+    projectId: projectOverride || "nonprofithq",
+  });
+}
+
+async function main() {
+  initAdmin();
 
   const auth = admin.auth();
   const db = admin.firestore();
@@ -36,9 +73,18 @@ async function main() {
   try {
     user = await auth.getUserByEmail(EMAIL);
   } catch (e) {
-    console.error(
-      `No Firebase Auth user for "${EMAIL}". Create the user in Firebase Console → Authentication first.`,
-    );
+    if (e.code === "auth/user-not-found") {
+      console.error(`No Firebase Auth user for "${EMAIL}" in this Firebase project.`);
+      console.error("");
+      console.error("Fix:");
+      console.error("  1. Open Firebase Console and select the SAME project as your service account (project_id in the JSON).");
+      console.error("  2. Authentication → Users → Add user → email + password.");
+      console.error("  3. Re-run: npm run bootstrap-admin");
+      console.error("");
+      console.error("Or set a different email: BOOTSTRAP_ADMIN_EMAIL=you@example.com npm run bootstrap-admin");
+    } else {
+      console.error(e.message || e);
+    }
     process.exit(1);
   }
 
