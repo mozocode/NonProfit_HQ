@@ -29,6 +29,10 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# Firebase / GCP service account keys (never commit)
+*-firebase-adminsdk-*.json
+**/firebase-adminsdk*.json
+
 # local env files (keep .env.example tracked)
 .env
 .env.local
