@@ -8,7 +8,8 @@
     "clean": "rimraf lib",
     "lint": "eslint src --ext .ts",
     "serve": "firebase emulators:start --only functions",
-    "deploy": "firebase deploy --only functions"
+    "deploy": "firebase deploy --only functions",
+    "bootstrap-admin": "node scripts/bootstrapFirstAdmin.cjs"
   },
   "engines": {
     "node": "20"

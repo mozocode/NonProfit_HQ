@@ -64,10 +64,40 @@ Security rules expect JWT custom claims:
 - `orgId` — tenant organization id  
 - `role` — `admin` | `staff` | `participant`
 
-Set these via the callable Cloud Function **`setOrgUserClaims`** (see `functions/src/index.ts`) after:
+### First admin (`mozodevelopment@gmail.com` or any email)
 
-1. User exists in **Firebase Auth**.
-2. Document exists in **`organizationMemberships`** with matching `organizationId`, `uid`, `active: true`, and `role`.
+The callable **`setOrgUserClaims`** requires an existing **admin** token, so the **first** admin must be bootstrapped with the **Admin SDK** (service account or Application Default Credentials).
+
+1. Create the user in **Firebase Console → Authentication** (email/password) if you have not already.
+2. Download a **service account key**: Firebase Console → Project settings → Service accounts → Generate new private key (keep it secret; never commit).
+3. From the repo:
+
+```bash
+export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/serviceAccountKey.json"
+cd functions
+npm run bootstrap-admin
+```
+
+Defaults: email **`mozodevelopment@gmail.com`**, org **`org_demo`**, org name **NonProfit HQ**. Override with env:
+
+```bash
+BOOTSTRAP_ADMIN_EMAIL=you@company.com BOOTSTRAP_ORG_ID=org_demo npm run bootstrap-admin
+```
+
+This script:
+
+- Sets **`custom claims`** `{ orgId, role: "admin" }`
+- **`merge`**s **`organizations/{orgId}`** (name, status, settings)
+- **`merge`**s **`organizationMemberships/{orgId}_{uid}`** (`active: true`, `role: admin`, `programIds: []`)
+- **`merge`**s **`profiles/{uid}`** (display name, email, timestamps)
+
+4. **Sign out and sign in again** in the web app (or hard-refresh after token refresh) so the new claims appear on the JWT.
+
+Script source: **`functions/scripts/bootstrapFirstAdmin.cjs`**.
+
+### Additional users (after you have an admin)
+
+Use the callable **`setOrgUserClaims`** from the app (admin-only) or Admin SDK, with Auth user + membership doc as documented in `functions/src/index.ts`.
 
 See [PHASE2-FIREBASE-AUTH.md](./PHASE2-FIREBASE-AUTH.md) and role notes below.
 
@@ -136,7 +166,7 @@ Use **Firebase Admin SDK** scripts with a service account or emulator host; do n
 
 - **Firestore rules** use `request.auth.token.orgId` and `request.auth.token.role` plus **`organizationMemberships/{orgId}_{uid}`** for `active` membership.
 - **UI** uses `RoleGate` — not a security boundary.
-- First admin bootstrap: create org + membership in Firestore, create Auth user, run **`setOrgUserClaims`** with Admin SDK or callable (authenticated as admin — chicken-and-egg: often first claims set via Admin SDK script).
+- First admin bootstrap: use **`functions/scripts/bootstrapFirstAdmin.cjs`** (`npm run bootstrap-admin` in `functions/`) with a service account — see **§5 Custom claims** above.
 
 ## Related docs
 

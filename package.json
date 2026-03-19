@@ -12,7 +12,8 @@
     "seed:validate": "node --experimental-strip-types scripts/seed/validateSeed.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "deploy:hosting": "firebase deploy --only hosting --project nonprofithq"
+    "deploy:hosting": "firebase deploy --only hosting --project nonprofithq",
+    "bootstrap-admin": "cd functions && npm run bootstrap-admin"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
