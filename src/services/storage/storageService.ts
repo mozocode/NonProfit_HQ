@@ -1,11 +1,12 @@
-import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+import { getDownloadURL, ref, uploadBytes, type FirebaseStorage } from "firebase/storage";
 
 import { withRetry } from "@/lib/retry";
-import { storage } from "@/services/firebase/client";
+import { getFirebaseStorageInstance } from "@/services/firebase/client";
 
-function guardStorage(): NonNullable<typeof storage> {
-  if (!storage) throw new Error("Firebase Storage is not initialized (e.g. during SSR).");
-  return storage;
+function guardStorage(): FirebaseStorage {
+  const s = getFirebaseStorageInstance();
+  if (!s) throw new Error("Firebase Storage is not initialized (e.g. during SSR).");
+  return s;
 }
 
 /** Path for family documents: organizations/{orgId}/families/{familyId}/documents/{documentId}/{fileName}. Reusable by mobile. */
@@ -41,10 +42,8 @@ export const storageService = {
     return path;
   },
 
-  /** Get a download URL for a document by storage path. Admin/staff use for viewing; same API for mobile. */
-  async getDocumentDownloadUrl(storagePath: string): Promise<string> {
+  async getDocumentDownloadUrl(path: string): Promise<string> {
     const s = guardStorage();
-    const fileRef = ref(s, storagePath);
-    return getDownloadURL(fileRef);
+    return getDownloadURL(ref(s, path));
   },
 };

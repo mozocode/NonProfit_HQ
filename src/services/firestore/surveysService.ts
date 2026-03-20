@@ -11,7 +11,7 @@ import {
   type Timestamp,
 } from "firebase/firestore";
 
-import { firestoreDb } from "@/services/firebase/client";
+import { getFirestoreDb } from "@/services/firebase/client";
 import { COLLECTIONS } from "@/services/firestore/collections";
 import type { Survey, SurveyAudience, SurveyQuestion, SurveyResponse } from "@/types/domain";
 import type {
@@ -22,9 +22,10 @@ import type {
   CreateSurveyInput,
 } from "@/types/surveys";
 
-function guardDb() {
-  if (!firestoreDb) throw new Error("Firestore is not initialized (e.g. during SSR).");
-  return firestoreDb;
+function guardDb(): import("firebase/firestore").Firestore {
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore is not initialized (e.g. during SSR).");
+  return db;
 }
 
 function timestampToIso(value: unknown): string {

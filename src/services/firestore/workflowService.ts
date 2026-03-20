@@ -1,14 +1,15 @@
 import { doc, getDoc, updateDoc, serverTimestamp } from "firebase/firestore";
 
-import { firestoreDb } from "@/services/firebase/client";
+import { getFirestoreDb } from "@/services/firebase/client";
 import { COLLECTIONS } from "@/services/firestore/collections";
 import type { FamilyWorkflowState, StageHistoryEntry, WorkflowNextAction } from "@/types/workflow";
 import { getNextActionForFamily } from "./goalsTasksService";
 import { isNextActionOverdue } from "@/lib/workflowUtils";
 
-function guardDb() {
-  if (!firestoreDb) throw new Error("Firestore is not initialized (e.g. during SSR).");
-  return firestoreDb;
+function guardDb(): import("firebase/firestore").Firestore {
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore is not initialized (e.g. during SSR).");
+  return db;
 }
 
 function timestampToIso(value: unknown): string | null {

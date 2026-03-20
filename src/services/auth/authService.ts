@@ -3,15 +3,17 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
+  type Auth,
   type User,
 } from "firebase/auth";
 
-import { firebaseAuth } from "@/services/firebase/client";
+import { getFirebaseAuth } from "@/services/firebase/client";
 import type { AuthUser } from "@/types/auth";
 
-function guardAuth(): NonNullable<typeof firebaseAuth> {
-  if (!firebaseAuth) throw new Error("Firebase Auth is not initialized (e.g. during SSR).");
-  return firebaseAuth;
+function guardAuth(): Auth {
+  const auth = getFirebaseAuth();
+  if (!auth) throw new Error("Firebase Auth is not initialized (e.g. during SSR).");
+  return auth;
 }
 
 async function mapUser(user: User): Promise<AuthUser> {
@@ -39,11 +41,12 @@ export const authService = {
     await signOut(auth);
   },
   subscribe(handler: (user: AuthUser | null) => void): () => void {
-    if (!firebaseAuth) {
+    const auth = getFirebaseAuth();
+    if (!auth) {
       handler(null);
       return () => {};
     }
-    return onAuthStateChanged(firebaseAuth, (firebaseUser) => {
+    return onAuthStateChanged(auth, (firebaseUser) => {
       if (!firebaseUser) {
         handler(null);
         return;

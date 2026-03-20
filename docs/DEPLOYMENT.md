@@ -19,6 +19,10 @@ This repo is a standard **Next.js 15** app. **Production for project `nonprofith
 
 Always set **all** Firebase web config variables for the target project. Never commit `.env.local`.
 
+**Login / Auth on the live site:** `NEXT_PUBLIC_FIREBASE_*` must be present **at build time** (baked into the JS bundle). If they are missing, sign-in fails and the login page shows a configuration warning after load. In **Firebase App Hosting**, add these in the backend’s **Environment** settings (or pass them in CI before `next build`). Also confirm **Authentication → Sign-in method → Email/Password** is enabled and **Authentication → Settings → Authorized domains** includes `nonprofithq.firebaseapp.com` and `nonprofithq.web.app`.
+
+The Firebase web SDK is **initialized lazily** in `src/services/firebase/client.ts` (on first use in the browser), so you should not see `Firebase Auth is not initialized (e.g. during SSR)` on the client after a correct deploy. If that error still appears in the browser console when you click **Sign in**, the bundle still has no API key — double-check App Hosting env vars and trigger a **new build**.
+
 ## Firebase CLI
 
 Install [Firebase CLI](https://firebase.google.com/docs/cli) and login:

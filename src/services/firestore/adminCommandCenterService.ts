@@ -15,7 +15,7 @@ import {
 } from "firebase/firestore";
 
 import { ROUTES } from "@/constants";
-import { firestoreDb } from "@/services/firebase/client";
+import { getFirestoreDb } from "@/services/firebase/client";
 import { COLLECTIONS } from "@/services/firestore/collections";
 import { resolveSegmentFamilyIds } from "@/services/firestore/adminReportingService";
 import type { ReportingSegmentFilters } from "@/types/reporting";
@@ -27,9 +27,10 @@ import type {
   StaffOversightRow,
 } from "@/types/commandCenter";
 
-function guardDb() {
-  if (!firestoreDb) throw new Error("Firestore is not initialized (e.g. during SSR).");
-  return firestoreDb;
+function guardDb(): import("firebase/firestore").Firestore {
+  const db = getFirestoreDb();
+  if (!db) throw new Error("Firestore is not initialized (e.g. during SSR).");
+  return db;
 }
 
 function toIso(value: unknown): string {

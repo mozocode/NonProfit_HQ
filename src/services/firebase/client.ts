@@ -6,9 +6,10 @@ import { getStorage, type FirebaseStorage } from "firebase/storage";
 import { getFirebaseClientConfig, validateFirebaseEnv } from "@/lib/env";
 
 /**
- * Initialize Firebase only in browser to avoid SSR issues. Returns null during SSR.
+ * Resolve Firebase app lazily on each access so we never "lock in" null from an SSR
+ * evaluation of this module. `NEXT_PUBLIC_*` must still be set at build time for production.
  */
-function getFirebaseApp(): FirebaseApp | null {
+function resolveFirebaseApp(): FirebaseApp | null {
   if (typeof window === "undefined") return null;
   const config = getFirebaseClientConfig();
   if (!config.apiKey) {
@@ -18,8 +19,18 @@ function getFirebaseApp(): FirebaseApp | null {
   return getApps().length ? getApp() : initializeApp(config);
 }
 
-const firebaseApp = getFirebaseApp();
+/** Browser-only; null during SSR or when env is missing. */
+export function getFirebaseAuth(): Auth | null {
+  const app = resolveFirebaseApp();
+  return app ? getAuth(app) : null;
+}
 
-export const firebaseAuth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null;
-export const firestoreDb: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
-export const storage: FirebaseStorage | null = firebaseApp ? getStorage(firebaseApp) : null;
+export function getFirestoreDb(): Firestore | null {
+  const app = resolveFirebaseApp();
+  return app ? getFirestore(app) : null;
+}
+
+export function getFirebaseStorageInstance(): FirebaseStorage | null {
+  const app = resolveFirebaseApp();
+  return app ? getStorage(app) : null;
+}
