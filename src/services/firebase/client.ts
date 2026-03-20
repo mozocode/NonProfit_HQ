@@ -3,23 +3,61 @@ import { getAuth, type Auth } from "firebase/auth";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
-import { getFirebaseClientConfig, validateFirebaseEnv } from "@/lib/env";
+import { type FirebaseClientConfig, getFirebaseClientConfig, validateFirebaseEnv } from "@/lib/env";
 
-/**
- * Resolve Firebase app lazily on each access so we never "lock in" null from an SSR
- * evaluation of this module. `NEXT_PUBLIC_*` must still be set at build time for production.
- */
-function resolveFirebaseApp(): FirebaseApp | null {
+let runtimeInitPromise: Promise<FirebaseApp | null> | null = null;
+
+function resolveFirebaseAppSync(): FirebaseApp | null {
   if (typeof window === "undefined") return null;
+  if (getApps().length) return getApp();
   const config = getFirebaseClientConfig();
-  if (!config.apiKey) {
+  if (!config.apiKey?.trim()) {
     validateFirebaseEnv();
     return null;
   }
-  return getApps().length ? getApp() : initializeApp(config);
+  return initializeApp(config);
 }
 
-/** Browser-only; null during SSR or when env is missing. */
+/**
+ * Ensures Firebase is initialized in the browser: uses build-time env first,
+ * then fetches `/api/firebase-config` (server reads runtime env on App Hosting).
+ */
+export function ensureFirebaseAppAsync(): Promise<FirebaseApp | null> {
+  if (typeof window === "undefined") return Promise.resolve(null);
+
+  const sync = resolveFirebaseAppSync();
+  if (sync) return Promise.resolve(sync);
+
+  if (!runtimeInitPromise) {
+    runtimeInitPromise = fetch("/api/firebase-config", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return null;
+        const data = (await res.json()) as Partial<FirebaseClientConfig> & { error?: string };
+        if (data.error || !data.apiKey?.trim()) return null;
+        const full: FirebaseClientConfig = {
+          apiKey: data.apiKey,
+          authDomain: String(data.authDomain ?? ""),
+          projectId: String(data.projectId ?? ""),
+          storageBucket: String(data.storageBucket ?? ""),
+          messagingSenderId: String(data.messagingSenderId ?? ""),
+          appId: String(data.appId ?? ""),
+        };
+        if (getApps().length) return getApp();
+        return initializeApp(full);
+      })
+      .catch(() => null);
+  }
+
+  return runtimeInitPromise;
+}
+
+function resolveFirebaseApp(): FirebaseApp | null {
+  if (typeof window === "undefined") return null;
+  if (getApps().length) return getApp();
+  return resolveFirebaseAppSync();
+}
+
+/** Browser-only; null during SSR or before ensureFirebaseAppAsync() when using runtime config. */
 export function getFirebaseAuth(): Auth | null {
   const app = resolveFirebaseApp();
   return app ? getAuth(app) : null;

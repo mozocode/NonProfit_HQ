@@ -8,10 +8,10 @@ import {
   type User,
 } from "firebase/auth";
 
-import { getFirebaseAuth } from "@/services/firebase/client";
+import { ensureFirebaseAppAsync, getFirebaseAuth } from "@/services/firebase/client";
 import type { AuthUser } from "@/types/auth";
 
-/** Thrown when the web bundle was built without NEXT_PUBLIC_FIREBASE_* (e.g. App Hosting env not set for BUILD). */
+/** Thrown when neither build-time nor runtime `/api/firebase-config` could supply Firebase web config. */
 const AUTH_CONFIG_CODE = "auth/missing-client-config";
 
 function guardAuth(): Auth {
@@ -19,7 +19,7 @@ function guardAuth(): Auth {
   if (!auth) {
     throw new FirebaseError(
       AUTH_CONFIG_CODE,
-      "Firebase Auth is not configured in this build. Set all NEXT_PUBLIC_FIREBASE_* variables for the App Hosting backend (include BUILD availability) and redeploy."
+      "Firebase Auth is not configured. Set NEXT_PUBLIC_FIREBASE_* on the App Hosting backend (BUILD and/or RUNTIME), then redeploy."
     );
   }
   return auth;
@@ -41,28 +41,41 @@ async function mapUser(user: User): Promise<AuthUser> {
 
 export const authService = {
   async login(email: string, password: string): Promise<AuthUser> {
+    await ensureFirebaseAppAsync();
     const auth = guardAuth();
     const result = await signInWithEmailAndPassword(auth, email, password);
     return mapUser(result.user);
   },
   async logout(): Promise<void> {
+    await ensureFirebaseAppAsync();
     const auth = guardAuth();
     await signOut(auth);
   },
   subscribe(handler: (user: AuthUser | null) => void): () => void {
-    const auth = getFirebaseAuth();
-    if (!auth) {
-      handler(null);
-      return () => {};
-    }
-    return onAuthStateChanged(auth, (firebaseUser) => {
-      if (!firebaseUser) {
+    let innerUnsub: (() => void) | undefined;
+    let cancelled = false;
+
+    void ensureFirebaseAppAsync().then(() => {
+      if (cancelled) return;
+      const auth = getFirebaseAuth();
+      if (!auth) {
         handler(null);
         return;
       }
-      mapUser(firebaseUser)
-        .then((authUser) => handler(authUser))
-        .catch(() => handler(null));
+      innerUnsub = onAuthStateChanged(auth, (firebaseUser) => {
+        if (!firebaseUser) {
+          handler(null);
+          return;
+        }
+        mapUser(firebaseUser)
+          .then((authUser) => handler(authUser))
+          .catch(() => handler(null));
+      });
     });
+
+    return () => {
+      cancelled = true;
+      innerUnsub?.();
+    };
   },
 };

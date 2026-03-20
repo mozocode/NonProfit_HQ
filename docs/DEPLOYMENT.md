@@ -19,9 +19,11 @@ This repo is a standard **Next.js 15** app. **Production for project `nonprofith
 
 Always set **all** Firebase web config variables for the target project. Never commit `.env.local`.
 
-**Login / Auth on the live site:** `NEXT_PUBLIC_FIREBASE_*` must be present **at build time** (baked into the JS bundle). If they are missing, sign-in fails and the login page shows a configuration warning after load. In **Firebase App Hosting**, open your backend → **Environment** and add **every** variable from `.env.example` using values from **Project settings → Your apps → Web app**. For each variable, set **availability** to include **BUILD** (and usually **RUNTIME** for `NEXT_PUBLIC_*`); if variables are runtime-only, the Next.js build will still embed empty strings and Auth will not work. Also confirm **Authentication → Sign-in method → Email/Password** is enabled and **Authentication → Settings → Authorized domains** includes `nonprofithq.firebaseapp.com` and `nonprofithq.web.app`.
+**Login / Auth on the live site:** Prefer setting **all** `NEXT_PUBLIC_FIREBASE_*` with **BUILD** availability so they are inlined at `next build`. If App Hosting only injects them at **RUNTIME**, the browser bundle can still start empty; this app then loads config from **`GET /api/firebase-config`** (server reads the same env vars at request time) and initializes Firebase in the browser. You still must define every variable on the backend — otherwise that endpoint returns 503 and sign-in cannot work.
 
-The Firebase web SDK is **initialized lazily** in `src/services/firebase/client.ts`. If sign-in still fails with a missing-config error, the production bundle has no API key — fix App Hosting env (BUILD availability), then trigger a **new rollout**. `next build` also logs a console warning when those variables are missing at build time.
+In **Firebase App Hosting**, open your backend → **Environment** and add **every** variable from `.env.example` using values from **Project settings → Your apps → Web app**. Include **BUILD** and/or **RUNTIME** as above. Also confirm **Authentication → Sign-in method → Email/Password** is enabled and **Authentication → Settings → Authorized domains** includes `nonprofithq.firebaseapp.com` and `nonprofithq.web.app`.
+
+The Firebase web SDK is initialized in **`src/services/firebase/client.ts`** (build-time config first, then `/api/firebase-config`). `next build` logs a warning if vars are missing at build time. After changing env, trigger a **new rollout** and hard-refresh (or use an incognito window) so you are not running an old JS bundle — stale chunks can still show errors like `Firebase Auth is not initialized` from older deploys.
 
 ## Firebase CLI
 

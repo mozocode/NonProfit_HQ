@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/constants";
 import { loginSchema, type LoginSchema } from "@/features/auth/loginSchema";
 import { authService } from "@/services/auth/authService";
-import { getFirebaseAuth } from "@/services/firebase/client";
+import { ensureFirebaseAppAsync, getFirebaseAuth } from "@/services/firebase/client";
 
 function mapAuthError(err: unknown): string {
   if (err instanceof FirebaseError) {
@@ -46,7 +46,10 @@ export function LoginForm() {
   /** Only after mount — firebase client is null during SSR, avoid hydration mismatch. */
   const [configMissing, setConfigMissing] = useState(false);
   useEffect(() => {
-    setConfigMissing(!getFirebaseAuth());
+    void (async () => {
+      await ensureFirebaseAppAsync();
+      setConfigMissing(!getFirebaseAuth());
+    })();
   }, []);
 
   const { control, handleSubmit, formState } = useForm<LoginSchema>({
