@@ -1,4 +1,4 @@
-import { initializeApp } from "firebase-admin/app";
+import "./adminInit";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { auth as authV1 } from "firebase-functions/v1";
@@ -11,8 +11,6 @@ import { runDailyOrgSummary } from "./scheduled/dailyOrgSummary";
 import { runWeeklyAgendaReminder, runWeeklyAgendaOverdueNotifyAdmin } from "./scheduled/weeklyAgendaReminder";
 import { runWeeklyReportReminder, runWeeklyReportOverdueNotifyAdmin } from "./scheduled/weeklyReportReminder";
 import { runReportingSnapshots } from "./scheduled/reportingSnapshots";
-
-initializeApp();
 
 const db = getFirestore();
 const auth = getAuth();

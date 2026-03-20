@@ -167,11 +167,13 @@ Source: **`storage.rules`**.
 - Primary path: `organizations/{organizationId}/**` — read: signed-in + `token.orgId == organizationId`; write: staff/admin.
 - Legacy: `orgs/{orgId}/**` — participant read allowed.
 
-Deploy:
+**First time only:** Firebase Storage must be initialized in the console (CLI cannot create the default `*.appspot.com` bucket). Open **[Firebase → Storage → Get started](https://console.firebase.google.com/project/nonprofithq/storage)** for project `nonprofithq`, complete the wizard (location, rules mode), then deploy:
 
 ```bash
-firebase deploy --only storage
+firebase deploy --only storage --project nonprofithq
 ```
+
+If you see `Firebase Storage has not been set up`, you skipped this step.
 
 Ensure Storage bucket CORS / rules align with browser upload paths used in `storageService.buildFamilyDocumentPath`.
 
@@ -184,8 +186,10 @@ cd functions
 npm ci
 npm run build
 cd ..
-firebase deploy --only functions
+firebase deploy --only functions --project nonprofithq
 ```
+
+Deployed functions include **`setOrgUserClaims`**, **`authOnCreate`**, **`reportExportGenerator`**, and scheduled jobs (`reminderDispatcher`, `dailyOrgSummary`, weekly reminders, etc.). Hosting SSR uses a separate function **`ssrnonprofithq`** (frameworks codebase).
 
 - **Node 20** per `functions/package.json` `engines`.
 - Scheduled jobs and callables: see [PHASE15-CLOUD-FUNCTIONS.md](./PHASE15-CLOUD-FUNCTIONS.md).
