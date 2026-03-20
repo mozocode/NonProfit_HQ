@@ -18,6 +18,8 @@ import { getFirebaseAuth } from "@/services/firebase/client";
 function mapAuthError(err: unknown): string {
   if (err instanceof FirebaseError) {
     switch (err.code) {
+      case "auth/missing-client-config":
+        return "This deployment is missing Firebase web configuration. In Firebase Console → App Hosting → your backend → Environment, add every NEXT_PUBLIC_FIREBASE_* value from your Web app config, ensure they apply to the BUILD step, then trigger a new rollout.";
       case "auth/invalid-credential":
       case "auth/wrong-password":
       case "auth/user-not-found":
@@ -32,8 +34,8 @@ function mapAuthError(err: unknown): string {
         return err.message || "Sign in failed. Please try again.";
     }
   }
-  if (err instanceof Error && err.message.includes("not initialized")) {
-    return "App configuration error: Firebase client env is missing. Set all NEXT_PUBLIC_FIREBASE_* in the hosting build (see .env.example) and redeploy.";
+  if (err instanceof Error && (err.message.includes("not initialized") || err.message.includes("not configured"))) {
+    return mapAuthError(new FirebaseError("auth/missing-client-config", err.message));
   }
   return "Sign in failed. Please try again.";
 }
@@ -78,7 +80,12 @@ export function LoginForm() {
             Add them in Firebase App Hosting env or your deploy pipeline, then redeploy.
           </p>
         ) : null}
-        <form className="space-y-4" onSubmit={handleSubmit(onSubmit)}>
+        <form
+          className="space-y-4"
+          onSubmit={(e) => {
+            void handleSubmit(onSubmit)(e).catch((err: unknown) => setSubmitError(mapAuthError(err)));
+          }}
+        >
           {submitError ? (
             <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800" role="alert">
               {submitError}

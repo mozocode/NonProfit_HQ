@@ -1,3 +1,4 @@
+import { FirebaseError } from "firebase/app";
 import {
   getIdTokenResult,
   onAuthStateChanged,
@@ -10,9 +11,17 @@ import {
 import { getFirebaseAuth } from "@/services/firebase/client";
 import type { AuthUser } from "@/types/auth";
 
+/** Thrown when the web bundle was built without NEXT_PUBLIC_FIREBASE_* (e.g. App Hosting env not set for BUILD). */
+const AUTH_CONFIG_CODE = "auth/missing-client-config";
+
 function guardAuth(): Auth {
   const auth = getFirebaseAuth();
-  if (!auth) throw new Error("Firebase Auth is not initialized (e.g. during SSR).");
+  if (!auth) {
+    throw new FirebaseError(
+      AUTH_CONFIG_CODE,
+      "Firebase Auth is not configured in this build. Set all NEXT_PUBLIC_FIREBASE_* variables for the App Hosting backend (include BUILD availability) and redeploy."
+    );
+  }
   return auth;
 }
 
