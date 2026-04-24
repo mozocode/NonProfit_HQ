@@ -1,5 +1,6 @@
 import { httpsCallable } from "firebase/functions";
 
+import { PLAN_FEATURES } from "@/config/entitlements";
 import { ensureFirebaseAppAsync, getFirebaseFunctions } from "@/services/firebase/client";
 import type { PlatformOverview } from "@/types/platformAdmin";
 
@@ -49,6 +50,13 @@ type DeletePlatformOrganizationPayload = {
   organizationId: string;
 };
 
+type SetOrganizationEntitlementPayload = {
+  organizationId: string;
+  plan: "starter" | "growth" | "professional" | "enterprise";
+  enabledFeatures: string[];
+  billingStatus?: "trial" | "active" | "past_due" | "canceled";
+};
+
 export async function updatePlatformOrganizationStatus(
   organizationId: string,
   status: "active" | "inactive",
@@ -67,4 +75,19 @@ export async function deletePlatformOrganization(organizationId: string): Promis
   const functions = guardFunctions();
   const callable = httpsCallable<DeletePlatformOrganizationPayload, { ok: true }>(functions, "deletePlatformOrganization");
   await callable({ organizationId });
+}
+
+export async function setOrganizationEntitlement(
+  organizationId: string,
+  plan: "starter" | "growth" | "professional" | "enterprise",
+): Promise<void> {
+  await ensureFirebaseAppAsync();
+  const functions = guardFunctions();
+  const callable = httpsCallable<SetOrganizationEntitlementPayload, { ok: true }>(functions, "setOrganizationEntitlement");
+  await callable({
+    organizationId,
+    plan,
+    enabledFeatures: PLAN_FEATURES[plan],
+    billingStatus: "active",
+  });
 }

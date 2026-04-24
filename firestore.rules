@@ -78,6 +78,19 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
     }
 
+    function handoffPath(handoffId) {
+      return /databases/$(database)/documents/referralHandoffs/$(handoffId);
+    }
+
+    function canAccessHandoff(handoffId) {
+      return isSignedIn()
+        && exists(handoffPath(handoffId))
+        && (
+          get(handoffPath(handoffId)).data.sourceOrganizationId == orgId()
+          || get(handoffPath(handoffId)).data.targetOrganizationId == orgId()
+        );
+    }
+
     // ---- Global (no tenant) ----
     match /profiles/{uid} {
       allow read: if canReadProfile(uid);
@@ -179,6 +192,65 @@ service cloud.firestore {
       allow read: if isActiveMember(docOrganizationId());
       allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
       allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /inquiries/{docId} {
+      allow read: if isStaffOrAdmin(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isStaff(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /referralHandoffs/{handoffId} {
+      allow read: if isSignedIn() && (
+        resource.data.sourceOrganizationId == orgId()
+        || resource.data.targetOrganizationId == orgId()
+      );
+      allow create: if isStaff(orgId())
+        && request.resource.data.sourceOrganizationId == orgId()
+        && request.resource.data.targetOrganizationId != orgId();
+      allow update: if isStaff(orgId()) && (
+        resource.data.sourceOrganizationId == orgId()
+        || resource.data.targetOrganizationId == orgId()
+      );
+      allow delete: if false;
+    }
+
+    match /sharingConsents/{consentId} {
+      allow read: if isSignedIn() && (
+        resource.data.organizationId == orgId() || canAccessHandoff(resource.data.handoffId)
+      );
+      allow create: if isAdmin(orgId()) && request.resource.data.organizationId == orgId();
+      allow update: if isAdmin(orgId()) && resource.data.organizationId == orgId();
+      allow delete: if false;
+    }
+
+    match /documentSignatures/{signatureId} {
+      allow read: if isStaffOrAdmin(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if false;
+    }
+
+    match /documentationPacks/{packId} {
+      allow read: if isStaffOrAdmin(docOrganizationId());
+      allow create: if isAdmin(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if isAdmin(docOrganizationId()) && immutableFieldsUnchanged();
+    }
+
+    match /entitlements/{organizationId} {
+      allow read: if isActiveMember(organizationId);
+      allow write: if false;
+    }
+
+    match /usageMetrics/{metricId} {
+      allow read: if isAdmin(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if false;
+    }
+
+    match /auditEvents/{eventId} {
+      allow read: if isAdmin(docOrganizationId());
+      allow create: if isStaff(requestOrganizationId()) && tenantMatch(orgId());
+      allow update, delete: if false;
     }
 
     match /requiredDocumentTemplates/{docId} {

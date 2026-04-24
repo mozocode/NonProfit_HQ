@@ -6,8 +6,13 @@ import { type PropsWithChildren, useState } from "react";
 import {
   BarChart3,
   BrainCircuit,
+  CalendarDays,
   Building2,
   CircleDollarSign,
+  ClipboardList,
+  FileText,
+  FolderKanban,
+  Handshake,
   LayoutDashboard,
   Settings,
   ShieldCheck,
@@ -40,9 +45,25 @@ function resolveActiveAdminNav(pathname: string): string {
   return "/admin";
 }
 
+function resolveActiveStaffNav(pathname: string): string {
+  if (pathname === "/staff/cases" || pathname.startsWith("/staff/cases/")) return "/staff/cases";
+  if (pathname === "/staff/resources" || pathname.startsWith("/staff/resources/")) return "/staff/resources";
+  if (pathname === "/staff/schedule" || pathname.startsWith("/staff/schedule/")) return "/staff/schedule";
+  if (pathname === "/staff/agenda" || pathname.startsWith("/staff/agenda/")) return "/staff/agenda";
+  if (pathname === "/staff/report" || pathname.startsWith("/staff/report/")) return "/staff/report";
+  if (pathname === "/staff/reminders" || pathname.startsWith("/staff/reminders/")) return "/staff/reminders";
+  if (pathname === "/staff/surveys" || pathname.startsWith("/staff/surveys/")) return "/staff/surveys";
+  if (pathname === "/staff/admin/inquiries" || pathname.startsWith("/staff/admin/inquiries/")) return "/staff/admin/inquiries";
+  if (pathname === "/staff/admin/handoffs" || pathname.startsWith("/staff/admin/handoffs/")) return "/staff/admin/handoffs";
+  if (pathname === "/staff/admin/templates" || pathname.startsWith("/staff/admin/templates/")) return "/staff/admin/templates";
+  if (pathname === "/staff/admin" || pathname.startsWith("/staff/admin/")) return "/staff/admin";
+  if (pathname === "/staff" || pathname.startsWith("/staff/")) return "/staff";
+  return "/staff";
+}
+
 export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps) {
   const pathname = usePathname();
-  const { orgId, organizations, activeOrganization, logout, switchOrganization } = useAuth();
+  const { orgId, organizations, activeOrganization, logout, switchOrganization, role } = useAuth();
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
   const adminNav = [
@@ -60,11 +81,30 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
     { href: "/staff", label: "Staff", icon: Users },
     { href: "/participant", label: "Participant", icon: LayoutDashboard },
   ];
-  const navItems = roleLabel === "Admin" ? adminNav : defaultNav;
+  const staffNav = [
+    { href: "/staff", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/staff/cases", label: "Cases", icon: FolderKanban },
+    { href: "/staff/resources", label: "Resources", icon: Handshake },
+    { href: "/staff/schedule", label: "Schedule", icon: CalendarDays },
+    { href: "/staff/agenda", label: "Agenda", icon: ClipboardList },
+    { href: "/staff/report", label: "Report", icon: FileText },
+    { href: "/staff/reminders", label: "Reminders", icon: BrainCircuit },
+  ];
+  const staffAdminNav = role === "admin"
+    ? [
+        { href: "/staff/admin", label: "Org Admin", icon: ShieldCheck },
+        { href: "/staff/admin/inquiries", label: "Inquiries", icon: Users },
+        { href: "/staff/admin/handoffs", label: "Handoffs", icon: Handshake },
+        { href: "/staff/admin/templates", label: "Templates", icon: FileText },
+      ]
+    : [];
+  const navItems = roleLabel === "Admin" ? adminNav : roleLabel === "Staff" ? [...staffNav, ...staffAdminNav] : defaultNav;
   const activeNavHref =
     roleLabel === "Admin"
       ? resolveActiveAdminNav(pathname)
-      : navItems.find((item) => pathname === item.href || pathname.startsWith(item.href + "/"))?.href ?? null;
+      : roleLabel === "Staff"
+        ? resolveActiveStaffNav(pathname)
+        : navItems.find((item) => pathname === item.href || pathname.startsWith(item.href + "/"))?.href ?? null;
   const activeOrgIsInternal = orgId ? INTERNAL_ORGANIZATION_IDS.has(orgId) : false;
   const hasOrgChoiceForCurrentContext = organizations.some((org) => org.organizationId === orgId);
   const showOrgSwitcher = organizations.length > 1 || (organizations.length > 0 && !hasOrgChoiceForCurrentContext);

@@ -37,6 +37,15 @@ export const COLLECTIONS = {
   reminders: "reminders",
   staffActionPrompts: "staffActionPrompts",
   escalationEvents: "escalationEvents",
+  // Nonprofit OS collaboration and intake hub
+  inquiries: "inquiries",
+  referralHandoffs: "referralHandoffs",
+  sharingConsents: "sharingConsents",
+  documentSignatures: "documentSignatures",
+  documentationPacks: "documentationPacks",
+  entitlements: "entitlements",
+  usageMetrics: "usageMetrics",
+  auditEvents: "auditEvents",
   // Surveys and outcomes
   surveys: "surveys",
   surveyQuestions: "surveyQuestions",

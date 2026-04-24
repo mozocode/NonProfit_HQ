@@ -9,7 +9,9 @@
     "lint": "eslint src --ext .ts",
     "serve": "firebase emulators:start --only functions",
     "deploy": "firebase deploy --only functions",
-    "bootstrap-admin": "node scripts/bootstrapFirstAdmin.cjs"
+    "bootstrap-admin": "node scripts/bootstrapFirstAdmin.cjs",
+    "pilot:entitlements": "node scripts/pilotEntitlements.cjs",
+    "pilot:backfill-audit": "node scripts/backfillAuditEvents.cjs"
   },
   "engines": {
     "node": "20"

@@ -16,6 +16,16 @@ const db = getFirestore();
 const auth = getAuth();
 const SUPER_ADMIN_EMAILS = new Set(["mozodevelopment@gmail.com"]);
 const INTERNAL_ORGANIZATION_IDS = new Set(["org_demo"]);
+const DEFAULT_ENTITLEMENT = {
+  plan: "starter",
+  enabledFeatures: ["case_timeline", "inquiries", "documentation_packs"],
+  limits: {
+    staffSeats: 5,
+    activeCases: 250,
+    monthlyHandoffs: 25,
+  },
+  billingStatus: "trial",
+} as const;
 
 type AppRole = "admin" | "staff" | "participant";
 
@@ -28,6 +38,59 @@ function isSuperAdminRequest(request: CallableRequest<unknown>): boolean {
     .trim()
     .toLowerCase();
   return SUPER_ADMIN_EMAILS.has(email);
+}
+
+async function logAuditEvent(input: {
+  organizationId: string;
+  actorUid: string | null;
+  actorEmail?: string | null;
+  action:
+    | "inquiry_created"
+    | "inquiry_status_changed"
+    | "handoff_created"
+    | "handoff_status_changed"
+    | "consent_granted"
+    | "consent_revoked"
+    | "signature_captured"
+    | "export_generated"
+    | "entitlement_changed";
+  entityType: "inquiry" | "handoff" | "consent" | "document" | "export" | "entitlement";
+  entityId: string;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await db.collection("auditEvents").add({
+    organizationId: input.organizationId,
+    actorUid: input.actorUid,
+    actorEmail: input.actorEmail ?? null,
+    action: input.action,
+    entityType: input.entityType,
+    entityId: input.entityId,
+    metadata: input.metadata ?? {},
+    createdAt: FieldValue.serverTimestamp(),
+  });
+}
+
+async function recordUsageMetric(input: {
+  organizationId: string;
+  metricKey:
+    | "inquiry_created"
+    | "inquiry_converted"
+    | "handoff_sent"
+    | "handoff_accepted"
+    | "signature_completed"
+    | "export_generated";
+  amount?: number;
+  recordedByUid?: string | null;
+  metadata?: Record<string, unknown>;
+}): Promise<void> {
+  await db.collection("usageMetrics").add({
+    organizationId: input.organizationId,
+    metricKey: input.metricKey,
+    amount: input.amount ?? 1,
+    recordedAt: FieldValue.serverTimestamp(),
+    recordedByUid: input.recordedByUid ?? null,
+    metadata: input.metadata ?? {},
+  });
 }
 
 function slugifyOrganizationName(value: string): string {
@@ -690,6 +753,535 @@ export const deletePlatformOrganization = onCall(
     return { ok: true };
   },
 );
+
+type CreateReferralHandoffPayload = {
+  targetOrganizationId: string;
+  familyId?: string | null;
+  participantProfileId?: string | null;
+  summary: string;
+};
+
+type UpdateReferralHandoffStatusPayload = {
+  handoffId: string;
+  status: "pending_acceptance" | "accepted" | "in_progress" | "closed" | "rejected";
+};
+
+type SetSharingConsentPayload = {
+  handoffId: string;
+  participantProfileId?: string | null;
+  allowedFields: string[];
+  expiresAtIso?: string | null;
+};
+
+type ReferralHandoffRow = {
+  handoffId: string;
+  sourceOrganizationId: string;
+  targetOrganizationId: string;
+  familyId: string | null;
+  participantProfileId: string | null;
+  summary: string;
+  requestedByUid: string;
+  status: "draft" | "pending_acceptance" | "accepted" | "in_progress" | "closed" | "rejected";
+  acceptedByUid: string | null;
+  updatedAtIso: string | null;
+};
+
+function toIso(value: unknown): string | null {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  if (typeof (value as FirebaseFirestore.Timestamp).toDate === "function") {
+    return (value as FirebaseFirestore.Timestamp).toDate().toISOString();
+  }
+  return null;
+}
+
+function assertTokenOrg(request: CallableRequest<unknown>): string {
+  const tokenOrgId = String(request.auth?.token.orgId ?? "").trim();
+  if (!tokenOrgId) throw new HttpsError("failed-precondition", "Active organization context is required.");
+  if (INTERNAL_ORGANIZATION_IDS.has(tokenOrgId)) {
+    throw new HttpsError("failed-precondition", "Platform internal context cannot perform tenant collaboration.");
+  }
+  return tokenOrgId;
+}
+
+async function hasActiveMembership(uid: string, organizationId: string): Promise<boolean> {
+  const membership = await getMembershipForOrg(uid, organizationId);
+  return Boolean(membership?.active);
+}
+
+export const createReferralHandoff = onCall(
+  async (request: CallableRequest<CreateReferralHandoffPayload>): Promise<{ ok: true; handoffId: string }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const sourceOrganizationId = assertTokenOrg(request);
+    const targetOrganizationId = String(request.data.targetOrganizationId ?? "").trim();
+    const summary = String(request.data.summary ?? "").trim();
+    if (!targetOrganizationId) throw new HttpsError("invalid-argument", "targetOrganizationId is required.");
+    if (targetOrganizationId === sourceOrganizationId) {
+      throw new HttpsError("invalid-argument", "Target organization must be different from source organization.");
+    }
+    if (!summary) throw new HttpsError("invalid-argument", "summary is required.");
+    if (!(await hasActiveMembership(request.auth.uid, sourceOrganizationId))) {
+      throw new HttpsError("permission-denied", "No active source organization membership.");
+    }
+
+    const targetOrg = await db.collection("organizations").doc(targetOrganizationId).get();
+    if (!targetOrg.exists) throw new HttpsError("not-found", "Target organization not found.");
+
+    const created = await db.collection("referralHandoffs").add({
+      sourceOrganizationId,
+      targetOrganizationId,
+      familyId: request.data.familyId ?? null,
+      participantProfileId: request.data.participantProfileId ?? null,
+      summary,
+      requestedByUid: request.auth.uid,
+      status: "pending_acceptance",
+      acceptedByUid: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await Promise.all([
+      logAuditEvent({
+        organizationId: sourceOrganizationId,
+        actorUid: request.auth.uid,
+        actorEmail: String(request.auth.token.email ?? "") || null,
+        action: "handoff_created",
+        entityType: "handoff",
+        entityId: created.id,
+        metadata: { targetOrganizationId },
+      }),
+      recordUsageMetric({
+        organizationId: sourceOrganizationId,
+        metricKey: "handoff_sent",
+        recordedByUid: request.auth.uid,
+        metadata: { handoffId: created.id, targetOrganizationId },
+      }),
+    ]);
+
+    return { ok: true, handoffId: created.id };
+  },
+);
+
+export const listMyReferralHandoffs = onCall(
+  async (request: CallableRequest<Record<string, never>>): Promise<{ handoffs: ReferralHandoffRow[] }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    if (!(await hasActiveMembership(request.auth.uid, organizationId))) {
+      throw new HttpsError("permission-denied", "No active organization membership.");
+    }
+
+    const [outboundSnap, inboundSnap] = await Promise.all([
+      db.collection("referralHandoffs").where("sourceOrganizationId", "==", organizationId).get(),
+      db.collection("referralHandoffs").where("targetOrganizationId", "==", organizationId).get(),
+    ]);
+    const map = new Map<string, ReferralHandoffRow>();
+    for (const d of [...outboundSnap.docs, ...inboundSnap.docs]) {
+      const data = d.data();
+      map.set(d.id, {
+        handoffId: d.id,
+        sourceOrganizationId: String(data.sourceOrganizationId ?? ""),
+        targetOrganizationId: String(data.targetOrganizationId ?? ""),
+        familyId: typeof data.familyId === "string" ? data.familyId : null,
+        participantProfileId: typeof data.participantProfileId === "string" ? data.participantProfileId : null,
+        summary: String(data.summary ?? ""),
+        requestedByUid: String(data.requestedByUid ?? ""),
+        status: (data.status as ReferralHandoffRow["status"]) ?? "draft",
+        acceptedByUid: typeof data.acceptedByUid === "string" ? data.acceptedByUid : null,
+        updatedAtIso: toIso(data.updatedAt),
+      });
+    }
+    const handoffs = [...map.values()].sort((a, b) => (b.updatedAtIso ?? "").localeCompare(a.updatedAtIso ?? ""));
+    return { handoffs };
+  },
+);
+
+export const updateReferralHandoffStatus = onCall(
+  async (request: CallableRequest<UpdateReferralHandoffStatusPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    const handoffId = String(request.data.handoffId ?? "").trim();
+    const nextStatus = request.data.status;
+    if (!handoffId) throw new HttpsError("invalid-argument", "handoffId is required.");
+    if (!nextStatus) throw new HttpsError("invalid-argument", "status is required.");
+
+    const handoffRef = db.collection("referralHandoffs").doc(handoffId);
+    const handoffSnap = await handoffRef.get();
+    if (!handoffSnap.exists) throw new HttpsError("not-found", "Handoff not found.");
+    const data = handoffSnap.data();
+    if (!data) throw new HttpsError("not-found", "Handoff not found.");
+    const sourceOrganizationId = String(data.sourceOrganizationId ?? "");
+    const targetOrganizationId = String(data.targetOrganizationId ?? "");
+    const isSource = sourceOrganizationId === organizationId;
+    const isTarget = targetOrganizationId === organizationId;
+    if (!isSource && !isTarget) throw new HttpsError("permission-denied", "No access to this handoff.");
+
+    const updatePayload: Record<string, unknown> = {
+      status: nextStatus,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (nextStatus === "accepted") {
+      if (!isTarget) throw new HttpsError("permission-denied", "Only target organization can accept.");
+      updatePayload.acceptedByUid = request.auth.uid;
+    }
+    if (nextStatus === "closed") {
+      if (!isSource && !isTarget) throw new HttpsError("permission-denied", "No access to close.");
+      updatePayload.closedAt = FieldValue.serverTimestamp();
+    }
+
+    await handoffRef.set(updatePayload, { merge: true });
+    await logAuditEvent({
+      organizationId,
+      actorUid: request.auth.uid,
+      actorEmail: String(request.auth.token.email ?? "") || null,
+      action: "handoff_status_changed",
+      entityType: "handoff",
+      entityId: handoffId,
+      metadata: { status: nextStatus, sourceOrganizationId, targetOrganizationId },
+    });
+    if (nextStatus === "accepted") {
+      await recordUsageMetric({
+        organizationId,
+        metricKey: "handoff_accepted",
+        recordedByUid: request.auth.uid,
+        metadata: { handoffId },
+      });
+    }
+    return { ok: true };
+  },
+);
+
+export const setSharingConsent = onCall(
+  async (request: CallableRequest<SetSharingConsentPayload>): Promise<{ ok: true; consentId: string }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    const handoffId = String(request.data.handoffId ?? "").trim();
+    const allowedFields = Array.isArray(request.data.allowedFields) ? request.data.allowedFields : [];
+    if (!handoffId) throw new HttpsError("invalid-argument", "handoffId is required.");
+    if (allowedFields.length === 0) throw new HttpsError("invalid-argument", "allowedFields is required.");
+
+    const handoffSnap = await db.collection("referralHandoffs").doc(handoffId).get();
+    if (!handoffSnap.exists) throw new HttpsError("not-found", "Handoff not found.");
+    const handoff = handoffSnap.data();
+    if (!handoff) throw new HttpsError("not-found", "Handoff not found.");
+    if (String(handoff.sourceOrganizationId ?? "") !== organizationId) {
+      throw new HttpsError("permission-denied", "Only source organization can grant sharing consent.");
+    }
+    const requesterRole = String(request.auth.token.role ?? "");
+    if (requesterRole !== "admin") {
+      throw new HttpsError("permission-denied", "Only organization admins can grant sharing consent.");
+    }
+
+    const expiresAtIso = String(request.data.expiresAtIso ?? "").trim();
+    const expiresAt = expiresAtIso ? new Date(expiresAtIso) : null;
+    const created = await db.collection("sharingConsents").add({
+      organizationId,
+      handoffId,
+      participantProfileId: request.data.participantProfileId ?? null,
+      allowedFields,
+      grantedByUid: request.auth.uid,
+      expiresAt: expiresAt ? expiresAt.toISOString() : null,
+      revokedAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    await logAuditEvent({
+      organizationId,
+      actorUid: request.auth.uid,
+      actorEmail: String(request.auth.token.email ?? "") || null,
+      action: "consent_granted",
+      entityType: "consent",
+      entityId: created.id,
+      metadata: { handoffId, allowedFieldCount: allowedFields.length },
+    });
+    return { ok: true, consentId: created.id };
+  },
+);
+
+type CaptureDocumentSignaturePayload = {
+  organizationId: string;
+  familyDocumentId: string;
+  signerName: string;
+  signerRole: "client" | "guardian" | "staff" | "witness";
+  signingSessionId: string;
+  lockDocumentRevision: string;
+};
+
+export const captureDocumentSignature = onCall(
+  async (request: CallableRequest<CaptureDocumentSignaturePayload>): Promise<{ ok: true; signatureId: string }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    if (organizationId !== String(request.data.organizationId ?? "").trim()) {
+      throw new HttpsError("permission-denied", "Token organization mismatch.");
+    }
+    const familyDocumentId = String(request.data.familyDocumentId ?? "").trim();
+    const signerName = String(request.data.signerName ?? "").trim();
+    const signerRole = request.data.signerRole;
+    const signingSessionId = String(request.data.signingSessionId ?? "").trim();
+    const lockDocumentRevision = String(request.data.lockDocumentRevision ?? "").trim();
+    if (!familyDocumentId || !signerName || !signerRole || !signingSessionId || !lockDocumentRevision) {
+      throw new HttpsError("invalid-argument", "Missing required signature fields.");
+    }
+
+    const created = await db.collection("documentSignatures").add({
+      organizationId,
+      familyDocumentId,
+      signerUid: request.auth.uid,
+      signerName,
+      signerRole,
+      signedAt: FieldValue.serverTimestamp(),
+      signingSessionId,
+      lockDocumentRevision,
+      ipAddressHash: null,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await Promise.all([
+      logAuditEvent({
+        organizationId,
+        actorUid: request.auth.uid,
+        actorEmail: String(request.auth.token.email ?? "") || null,
+        action: "signature_captured",
+        entityType: "document",
+        entityId: created.id,
+        metadata: { familyDocumentId, signerRole },
+      }),
+      recordUsageMetric({
+        organizationId,
+        metricKey: "signature_completed",
+        recordedByUid: request.auth.uid,
+        metadata: { signatureId: created.id },
+      }),
+    ]);
+    return { ok: true, signatureId: created.id };
+  },
+);
+
+type CreateAuditableExportPayload = {
+  exportType: "case_summary" | "handoff_packet" | "billing_packet";
+  reason: string;
+  filters?: Record<string, unknown>;
+};
+
+export const createAuditableExport = onCall(
+  async (request: CallableRequest<CreateAuditableExportPayload>): Promise<{ ok: true; exportId: string }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    const role = String(request.auth.token.role ?? "");
+    if (role !== "admin") throw new HttpsError("permission-denied", "Admin role required for exports.");
+
+    const exportType = request.data.exportType;
+    const reason = String(request.data.reason ?? "").trim();
+    if (!exportType || !reason) throw new HttpsError("invalid-argument", "exportType and reason are required.");
+
+    const created = await db.collection("adminReportExports").add({
+      organizationId,
+      exportType,
+      reason,
+      status: "queued",
+      requestedBy: request.auth.uid,
+      requestedAt: FieldValue.serverTimestamp(),
+      filters: request.data.filters ?? {},
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    await Promise.all([
+      logAuditEvent({
+        organizationId,
+        actorUid: request.auth.uid,
+        actorEmail: String(request.auth.token.email ?? "") || null,
+        action: "export_generated",
+        entityType: "export",
+        entityId: created.id,
+        metadata: { exportType, reason },
+      }),
+      recordUsageMetric({
+        organizationId,
+        metricKey: "export_generated",
+        recordedByUid: request.auth.uid,
+        metadata: { exportId: created.id, exportType },
+      }),
+    ]);
+    return { ok: true, exportId: created.id };
+  },
+);
+
+type SetOrganizationDataRetentionPayload = {
+  organizationId?: string;
+  retentionDays: number;
+};
+
+export const setOrganizationDataRetention = onCall(
+  async (request: CallableRequest<SetOrganizationDataRetentionPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const tokenOrgId = assertTokenOrg(request);
+    const requestedOrgId = String(request.data.organizationId ?? "").trim();
+    const organizationId = requestedOrgId || tokenOrgId;
+    const retentionDays = Number(request.data.retentionDays ?? 0);
+    if (!Number.isFinite(retentionDays) || retentionDays < 30 || retentionDays > 3650) {
+      throw new HttpsError("invalid-argument", "retentionDays must be between 30 and 3650.");
+    }
+    const isSuperAdmin = isSuperAdminRequest(request);
+    const role = String(request.auth.token.role ?? "");
+    if (!isSuperAdmin && (role !== "admin" || organizationId !== tokenOrgId)) {
+      throw new HttpsError("permission-denied", "Only org admin (own org) or super admin can set retention.");
+    }
+
+    await db.collection("organizations").doc(organizationId).set(
+      {
+        "settings.dataRetentionDays": retentionDays,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ok: true };
+  },
+);
+
+type SetOrganizationEntitlementPayload = {
+  organizationId: string;
+  plan: "starter" | "growth" | "professional" | "enterprise";
+  enabledFeatures: string[];
+  limits?: {
+    staffSeats?: number | null;
+    activeCases?: number | null;
+    monthlyHandoffs?: number | null;
+  };
+  billingStatus?: "trial" | "active" | "past_due" | "canceled";
+};
+
+export const setOrganizationEntitlement = onCall(
+  async (request: CallableRequest<SetOrganizationEntitlementPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    if (!isSuperAdminRequest(request)) throw new HttpsError("permission-denied", "Super admin required.");
+    const organizationId = String(request.data.organizationId ?? "").trim();
+    if (!organizationId) throw new HttpsError("invalid-argument", "organizationId is required.");
+    await db.collection("entitlements").doc(organizationId).set(
+      {
+        organizationId,
+        plan: request.data.plan,
+        enabledFeatures: request.data.enabledFeatures ?? [],
+        limits: {
+          staffSeats: request.data.limits?.staffSeats ?? null,
+          activeCases: request.data.limits?.activeCases ?? null,
+          monthlyHandoffs: request.data.limits?.monthlyHandoffs ?? null,
+        },
+        billingStatus: request.data.billingStatus ?? "active",
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedByUid: request.auth.uid,
+      },
+      { merge: true },
+    );
+    await logAuditEvent({
+      organizationId,
+      actorUid: request.auth.uid,
+      actorEmail: String(request.auth.token.email ?? "") || null,
+      action: "entitlement_changed",
+      entityType: "entitlement",
+      entityId: organizationId,
+      metadata: { plan: request.data.plan },
+    });
+    return { ok: true };
+  },
+);
+
+export const getMyOrganizationEntitlement = onCall(
+  async (request: CallableRequest<Record<string, never>>): Promise<{
+    organizationId: string;
+    plan: "starter" | "growth" | "professional" | "enterprise";
+    enabledFeatures: string[];
+    limits: { staffSeats: number | null; activeCases: number | null; monthlyHandoffs: number | null };
+    billingStatus: "trial" | "active" | "past_due" | "canceled";
+  }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    const entitlementSnap = await db.collection("entitlements").doc(organizationId).get();
+    if (!entitlementSnap.exists) {
+      return {
+        organizationId,
+        plan: DEFAULT_ENTITLEMENT.plan,
+        enabledFeatures: [...DEFAULT_ENTITLEMENT.enabledFeatures],
+        limits: { ...DEFAULT_ENTITLEMENT.limits },
+        billingStatus: DEFAULT_ENTITLEMENT.billingStatus,
+      };
+    }
+    const data = entitlementSnap.data() ?? {};
+    return {
+      organizationId,
+      plan: (data.plan as "starter" | "growth" | "professional" | "enterprise") ?? DEFAULT_ENTITLEMENT.plan,
+      enabledFeatures: Array.isArray(data.enabledFeatures) ? data.enabledFeatures : [...DEFAULT_ENTITLEMENT.enabledFeatures],
+      limits: {
+        staffSeats: typeof data.limits?.staffSeats === "number" ? data.limits.staffSeats : null,
+        activeCases: typeof data.limits?.activeCases === "number" ? data.limits.activeCases : null,
+        monthlyHandoffs: typeof data.limits?.monthlyHandoffs === "number" ? data.limits.monthlyHandoffs : null,
+      },
+      billingStatus: (data.billingStatus as "trial" | "active" | "past_due" | "canceled") ?? "active",
+    };
+  },
+);
+
+type TrackUsageMetricPayload = {
+  metricKey:
+    | "inquiry_created"
+    | "inquiry_converted"
+    | "handoff_sent"
+    | "handoff_accepted"
+    | "signature_completed"
+    | "export_generated";
+  amount?: number;
+  metadata?: Record<string, unknown>;
+};
+
+export const trackUsageMetric = onCall(
+  async (request: CallableRequest<TrackUsageMetricPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    const organizationId = assertTokenOrg(request);
+    await recordUsageMetric({
+      organizationId,
+      metricKey: request.data.metricKey,
+      amount: request.data.amount,
+      recordedByUid: request.auth.uid,
+      metadata: request.data.metadata,
+    });
+    return { ok: true };
+  },
+);
+
+export const enforceDataRetention = onSchedule("0 3 * * *", async () => {
+  const organizationsSnap = await db.collection("organizations").get();
+  let deletedAuditEvents = 0;
+  for (const orgDoc of organizationsSnap.docs) {
+    const orgData = orgDoc.data();
+    const organizationId = String(orgData.organizationId ?? orgDoc.id);
+    if (!organizationId || INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
+    const retentionDaysRaw = Number(orgData.settings?.dataRetentionDays ?? 365);
+    const retentionDays = Number.isFinite(retentionDaysRaw) ? Math.max(30, Math.min(3650, retentionDaysRaw)) : 365;
+    const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+
+    while (true) {
+      const staleAuditSnap = await db
+        .collection("auditEvents")
+        .where("organizationId", "==", organizationId)
+        .where("createdAt", "<=", cutoff)
+        .limit(300)
+        .get();
+      if (staleAuditSnap.empty) break;
+      const batch = db.batch();
+      for (const staleDoc of staleAuditSnap.docs) {
+        batch.delete(staleDoc.ref);
+      }
+      await batch.commit();
+      deletedAuditEvents += staleAuditSnap.size;
+      if (staleAuditSnap.size < 300) break;
+    }
+  }
+
+  await db.collection("systemJobs").add({
+    type: "enforceDataRetention",
+    status: "completed",
+    deletedAuditEvents,
+    executedAt: FieldValue.serverTimestamp(),
+  });
+});
 
 /** Every 15 min: missing document reminders (first + repeat every 7 days), notify staff; create staff action prompts if reminder unresolved after threshold. */
 export const reminderDispatcher = onSchedule("every 15 minutes", async () => {

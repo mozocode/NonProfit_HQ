@@ -9,12 +9,14 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingState } from "@/components/ui/loading-state";
+import { Select } from "@/components/ui/select";
 import { ROUTES } from "@/constants";
 import { authService } from "@/services/auth/authService";
 import {
   createPlatformOrganization,
   deletePlatformOrganization,
   getPlatformOverview,
+  setOrganizationEntitlement,
   updatePlatformOrganizationStatus,
 } from "@/services/functions/platformAdminService";
 import type { PlatformOverview } from "@/types/platformAdmin";
@@ -36,6 +38,7 @@ export function PlatformAdminDashboardView({
   const [createNote, setCreateNote] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [busyOrgId, setBusyOrgId] = useState<string | null>(null);
+  const [orgPlanDrafts, setOrgPlanDrafts] = useState<Record<string, "starter" | "growth" | "professional" | "enterprise">>({});
 
   const load = async () => {
     setIsLoading(true);
@@ -226,6 +229,30 @@ export function PlatformAdminDashboardView({
                     >
                       Delete
                     </Button>
+                    <div className="min-w-[180px]">
+                      <Select
+                        aria-label={`Set plan for ${org.name}`}
+                        disabled={busyOrgId === org.organizationId}
+                        value={orgPlanDrafts[org.organizationId] ?? "starter"}
+                        options={[
+                          { value: "starter", label: "Plan: starter" },
+                          { value: "growth", label: "Plan: growth" },
+                          { value: "professional", label: "Plan: professional" },
+                          { value: "enterprise", label: "Plan: enterprise" },
+                        ]}
+                        onChange={(e) => {
+                          const nextPlan = e.target.value as "starter" | "growth" | "professional" | "enterprise";
+                          setOrgPlanDrafts((prev) => ({ ...prev, [org.organizationId]: nextPlan }));
+                          setBusyOrgId(org.organizationId);
+                          setCreateError(null);
+                          setCreateNote(null);
+                          void setOrganizationEntitlement(org.organizationId, nextPlan)
+                            .then(() => setCreateNote(`${org.name} entitlement updated.`))
+                            .catch((err) => setCreateError(err instanceof Error ? err.message : "Failed to set plan."))
+                            .finally(() => setBusyOrgId(null));
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               ))}
