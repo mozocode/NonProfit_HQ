@@ -334,6 +334,84 @@ export const getPlatformOverview = onCall(
   },
 );
 
+type CreatePlatformOrganizationPayload = {
+  organizationName: string;
+  switchToNewOrg?: boolean;
+};
+
+type CreatePlatformOrganizationResponse = {
+  ok: true;
+  organizationId: string;
+};
+
+export const createPlatformOrganization = onCall(
+  async (request: CallableRequest<CreatePlatformOrganizationPayload>): Promise<CreatePlatformOrganizationResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+    if (request.auth.token.role !== "admin") {
+      throw new HttpsError("permission-denied", "Admin role required.");
+    }
+
+    const uid = request.auth.uid;
+    const organizationName = String(request.data.organizationName ?? "").trim();
+    const switchToNewOrg = request.data.switchToNewOrg !== false;
+    if (organizationName.length < 2) {
+      throw new HttpsError("invalid-argument", "Organization name must be at least 2 characters.");
+    }
+    if (organizationName.length > 120) {
+      throw new HttpsError("invalid-argument", "Organization name is too long.");
+    }
+
+    const slug = slugifyOrganizationName(organizationName);
+    const slugDocRef = db.collection("organizationSlugs").doc(slug);
+    const orgRef = db.collection("organizations").doc();
+    const membershipRef = db.collection("organizationMemberships").doc(`${orgRef.id}_${uid}`);
+
+    await db.runTransaction(async (tx) => {
+      const slugSnap = await tx.get(slugDocRef);
+      if (slugSnap.exists) {
+        throw new HttpsError("already-exists", "Organization name is already in use.");
+      }
+      tx.create(slugDocRef, {
+        slug,
+        organizationId: orgRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+      });
+      tx.create(orgRef, {
+        organizationId: orgRef.id,
+        name: organizationName,
+        status: "active",
+        settings: {},
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+      });
+      tx.set(
+        membershipRef,
+        {
+          organizationId: orgRef.id,
+          uid,
+          role: "admin",
+          active: true,
+          programIds: [],
+          invitedBy: null,
+          joinedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    if (switchToNewOrg) {
+      await auth.setCustomUserClaims(uid, { orgId: orgRef.id, role: "admin" });
+    }
+
+    return { ok: true, organizationId: orgRef.id };
+  },
+);
+
 /** Every 15 min: missing document reminders (first + repeat every 7 days), notify staff; create staff action prompts if reminder unresolved after threshold. */
 export const reminderDispatcher = onSchedule("every 15 minutes", async () => {
   const [missingResult, escalationResult] = await Promise.all([

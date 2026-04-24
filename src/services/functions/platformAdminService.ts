@@ -18,3 +18,24 @@ export async function getPlatformOverview(): Promise<PlatformOverview> {
   const result = await callable({});
   return result.data;
 }
+
+type CreatePlatformOrganizationPayload = {
+  organizationName: string;
+  switchToNewOrg?: boolean;
+};
+
+type CreatePlatformOrganizationResponse = {
+  ok: true;
+  organizationId: string;
+};
+
+export async function createPlatformOrganization(organizationName: string): Promise<CreatePlatformOrganizationResponse> {
+  await ensureFirebaseAppAsync();
+  const functions = guardFunctions();
+  const callable = httpsCallable<CreatePlatformOrganizationPayload, CreatePlatformOrganizationResponse>(
+    functions,
+    "createPlatformOrganization",
+  );
+  const result = await callable({ organizationName, switchToNewOrg: true });
+  return result.data;
+}
