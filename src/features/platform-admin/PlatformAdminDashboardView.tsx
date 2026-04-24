@@ -11,7 +11,12 @@ import { Label } from "@/components/ui/label";
 import { LoadingState } from "@/components/ui/loading-state";
 import { ROUTES } from "@/constants";
 import { authService } from "@/services/auth/authService";
-import { createPlatformOrganization, getPlatformOverview } from "@/services/functions/platformAdminService";
+import {
+  createPlatformOrganization,
+  deletePlatformOrganization,
+  getPlatformOverview,
+  updatePlatformOrganizationStatus,
+} from "@/services/functions/platformAdminService";
 import type { PlatformOverview } from "@/types/platformAdmin";
 
 type PlatformAdminDashboardViewProps = {
@@ -30,6 +35,7 @@ export function PlatformAdminDashboardView({
   const [createError, setCreateError] = useState<string | null>(null);
   const [createNote, setCreateNote] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [busyOrgId, setBusyOrgId] = useState<string | null>(null);
 
   const load = async () => {
     setIsLoading(true);
@@ -174,6 +180,53 @@ export function PlatformAdminDashboardView({
                   <p className="text-muted-foreground">
                     {org.organizationId} · {org.status} · {org.activeMembers} active members · {org.activeAdmins} admins
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busyOrgId === org.organizationId}
+                      onClick={() => {
+                        setBusyOrgId(org.organizationId);
+                        setCreateError(null);
+                        setCreateNote(null);
+                        const nextStatus = org.status === "active" ? "inactive" : "active";
+                        void updatePlatformOrganizationStatus(org.organizationId, nextStatus)
+                          .then(() => {
+                            setCreateNote(`${org.name} marked ${nextStatus}.`);
+                            return load();
+                          })
+                          .catch((e) => setCreateError(e instanceof Error ? e.message : "Failed to update organization."))
+                          .finally(() => setBusyOrgId(null));
+                      }}
+                    >
+                      {org.status === "active" ? "Deactivate" : "Activate"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={busyOrgId === org.organizationId}
+                      onClick={() => {
+                        const ok = window.confirm(
+                          `Delete organization "${org.name}"? This removes the organization and related memberships.`,
+                        );
+                        if (!ok) return;
+                        setBusyOrgId(org.organizationId);
+                        setCreateError(null);
+                        setCreateNote(null);
+                        void deletePlatformOrganization(org.organizationId)
+                          .then(() => {
+                            setCreateNote(`${org.name} deleted.`);
+                            return load();
+                          })
+                          .catch((e) => setCreateError(e instanceof Error ? e.message : "Failed to delete organization."))
+                          .finally(() => setBusyOrgId(null));
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

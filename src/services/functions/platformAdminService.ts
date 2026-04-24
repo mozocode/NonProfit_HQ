@@ -36,6 +36,35 @@ export async function createPlatformOrganization(organizationName: string): Prom
     functions,
     "createPlatformOrganization",
   );
-  const result = await callable({ organizationName, switchToNewOrg: true });
+  const result = await callable({ organizationName, switchToNewOrg: false });
   return result.data;
+}
+
+type UpdatePlatformOrganizationStatusPayload = {
+  organizationId: string;
+  status: "active" | "inactive";
+};
+
+type DeletePlatformOrganizationPayload = {
+  organizationId: string;
+};
+
+export async function updatePlatformOrganizationStatus(
+  organizationId: string,
+  status: "active" | "inactive",
+): Promise<void> {
+  await ensureFirebaseAppAsync();
+  const functions = guardFunctions();
+  const callable = httpsCallable<UpdatePlatformOrganizationStatusPayload, { ok: true }>(
+    functions,
+    "updatePlatformOrganizationStatus",
+  );
+  await callable({ organizationId, status });
+}
+
+export async function deletePlatformOrganization(organizationId: string): Promise<void> {
+  await ensureFirebaseAppAsync();
+  const functions = guardFunctions();
+  const callable = httpsCallable<DeletePlatformOrganizationPayload, { ok: true }>(functions, "deletePlatformOrganization");
+  await callable({ organizationId });
 }

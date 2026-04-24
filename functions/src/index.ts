@@ -14,11 +14,20 @@ import { runReportingSnapshots } from "./scheduled/reportingSnapshots";
 
 const db = getFirestore();
 const auth = getAuth();
+const SUPER_ADMIN_EMAILS = new Set(["mozodevelopment@gmail.com"]);
+const INTERNAL_ORGANIZATION_IDS = new Set(["org_demo"]);
 
 type AppRole = "admin" | "staff" | "participant";
 
 function isAppRole(value: unknown): value is AppRole {
   return value === "admin" || value === "staff" || value === "participant";
+}
+
+function isSuperAdminRequest(request: CallableRequest<unknown>): boolean {
+  const email = String(request.auth?.token.email ?? "")
+    .trim()
+    .toLowerCase();
+  return SUPER_ADMIN_EMAILS.has(email);
 }
 
 function slugifyOrganizationName(value: string): string {
@@ -288,8 +297,8 @@ export const getPlatformOverview = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
     }
-    if (request.auth.token.role !== "admin") {
-      throw new HttpsError("permission-denied", "Admin role required.");
+    if (!isSuperAdminRequest(request)) {
+      throw new HttpsError("permission-denied", "Super admin required.");
     }
 
     const organizationsSnap = await db.collection("organizations").get();
@@ -300,35 +309,40 @@ export const getPlatformOverview = onCall(
 
     const memberCounts = new Map<string, number>();
     const adminCounts = new Map<string, number>();
+    let filteredActiveMemberships = 0;
     for (const m of membershipsSnap.docs) {
       const data = m.data();
       const organizationId = String(data.organizationId ?? "");
-      if (!organizationId) continue;
+      if (!organizationId || INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
+      filteredActiveMemberships += 1;
       memberCounts.set(organizationId, (memberCounts.get(organizationId) ?? 0) + 1);
       if (data.role === "admin") {
         adminCounts.set(organizationId, (adminCounts.get(organizationId) ?? 0) + 1);
       }
     }
 
-    const organizations: PlatformOrganizationRow[] = organizationsSnap.docs.map((d) => {
-      const data = d.data();
-      const organizationId = String(data.organizationId ?? d.id);
-      const status = data.status === "inactive" ? "inactive" : "active";
-      return {
-        organizationId,
-        name: String(data.name ?? organizationId),
-        status,
-        activeMembers: memberCounts.get(organizationId) ?? 0,
-        activeAdmins: adminCounts.get(organizationId) ?? 0,
-      };
-    });
+    const organizations: PlatformOrganizationRow[] = organizationsSnap.docs
+      .map((d) => {
+        const data = d.data();
+        const organizationId = String(data.organizationId ?? d.id);
+        if (INTERNAL_ORGANIZATION_IDS.has(organizationId)) return null;
+        const status = data.status === "inactive" ? "inactive" : "active";
+        return {
+          organizationId,
+          name: String(data.name ?? organizationId),
+          status,
+          activeMembers: memberCounts.get(organizationId) ?? 0,
+          activeAdmins: adminCounts.get(organizationId) ?? 0,
+        };
+      })
+      .filter((x): x is PlatformOrganizationRow => x != null);
 
     organizations.sort((a, b) => a.name.localeCompare(b.name));
 
     return {
       totalOrganizations: organizations.length,
       activeOrganizations: organizations.filter((o) => o.status === "active").length,
-      activeMemberships: membershipsSnap.size,
+      activeMemberships: filteredActiveMemberships,
       organizations,
     };
   },
@@ -360,8 +374,8 @@ export const getPlatformUsers = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
     }
-    if (request.auth.token.role !== "admin") {
-      throw new HttpsError("permission-denied", "Admin role required.");
+    if (!isSuperAdminRequest(request)) {
+      throw new HttpsError("permission-denied", "Super admin required.");
     }
 
     const [membershipsSnap, organizationsSnap, profilesSnap] = await Promise.all([
@@ -380,6 +394,7 @@ export const getPlatformUsers = onCall(
     for (const d of organizationsSnap.docs) {
       const data = d.data();
       const organizationId = String(data.organizationId ?? d.id);
+      if (INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
       orgById.set(organizationId, {
         name: String(data.name ?? organizationId),
         createdBy: typeof data.createdBy === "string" ? data.createdBy : null,
@@ -402,7 +417,7 @@ export const getPlatformUsers = onCall(
       if (!isAppRole(role)) continue;
       const uid = String(data.uid ?? "");
       const organizationId = String(data.organizationId ?? "");
-      if (!uid || !organizationId) continue;
+      if (!uid || !organizationId || INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
 
       const org = orgById.get(organizationId);
       const isOwner = org?.createdBy === uid;
@@ -455,8 +470,8 @@ export const createPlatformOrganization = onCall(
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "Authentication required.");
     }
-    if (request.auth.token.role !== "admin") {
-      throw new HttpsError("permission-denied", "Admin role required.");
+    if (!isSuperAdminRequest(request)) {
+      throw new HttpsError("permission-denied", "Super admin required.");
     }
 
     const uid = request.auth.uid;
@@ -515,6 +530,69 @@ export const createPlatformOrganization = onCall(
     }
 
     return { ok: true, organizationId: orgRef.id };
+  },
+);
+
+type UpdatePlatformOrganizationStatusPayload = {
+  organizationId: string;
+  status: "active" | "inactive";
+};
+
+export const updatePlatformOrganizationStatus = onCall(
+  async (request: CallableRequest<UpdatePlatformOrganizationStatusPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    if (!isSuperAdminRequest(request)) throw new HttpsError("permission-denied", "Super admin required.");
+
+    const organizationId = String(request.data.organizationId ?? "").trim();
+    const status = request.data.status;
+    if (!organizationId) throw new HttpsError("invalid-argument", "organizationId is required.");
+    if (status !== "active" && status !== "inactive") throw new HttpsError("invalid-argument", "Invalid status.");
+    if (INTERNAL_ORGANIZATION_IDS.has(organizationId)) {
+      throw new HttpsError("failed-precondition", "Cannot modify internal platform organization.");
+    }
+
+    await db.collection("organizations").doc(organizationId).set(
+      {
+        status,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return { ok: true };
+  },
+);
+
+type DeletePlatformOrganizationPayload = {
+  organizationId: string;
+};
+
+async function deleteCollectionByQuery(q: FirebaseFirestore.Query): Promise<void> {
+  while (true) {
+    const snap = await q.limit(400).get();
+    if (snap.empty) break;
+    const batch = db.batch();
+    for (const d of snap.docs) batch.delete(d.ref);
+    await batch.commit();
+    if (snap.size < 400) break;
+  }
+}
+
+export const deletePlatformOrganization = onCall(
+  async (request: CallableRequest<DeletePlatformOrganizationPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    if (!isSuperAdminRequest(request)) throw new HttpsError("permission-denied", "Super admin required.");
+
+    const organizationId = String(request.data.organizationId ?? "").trim();
+    if (!organizationId) throw new HttpsError("invalid-argument", "organizationId is required.");
+    if (INTERNAL_ORGANIZATION_IDS.has(organizationId)) {
+      throw new HttpsError("failed-precondition", "Cannot delete internal platform organization.");
+    }
+
+    await deleteCollectionByQuery(db.collection("organizationMemberships").where("organizationId", "==", organizationId));
+    await deleteCollectionByQuery(db.collection("organizationSlugs").where("organizationId", "==", organizationId));
+    await db.collection("organizations").doc(organizationId).delete();
+
+    return { ok: true };
   },
 );
 
