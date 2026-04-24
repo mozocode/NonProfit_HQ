@@ -2,17 +2,17 @@
 
 import { RoleGate } from "@/components/auth/RoleGate";
 import { AppShell } from "@/components/layout/AppShell";
-import { AdminDashboardView } from "@/features/dashboard/AdminDashboardView";
+import { PlatformAdminDashboardView } from "@/features/platform-admin/PlatformAdminDashboardView";
 
 export default function OrganizationAdminDashboardPage() {
   return (
     <RoleGate allow={["admin"]}>
       <AppShell
         roleLabel="Admin"
-        subtitle="Organization-level overview, activity, staff oversight, and quick links"
-        title="Organization Admin Command Center"
+        subtitle="Create and manage customer organizations on the SaaS platform"
+        title="Organizations"
       >
-        <AdminDashboardView />
+        <PlatformAdminDashboardView showOpenOrganizationButton={false} />
       </AppShell>
     </RoleGate>
   );

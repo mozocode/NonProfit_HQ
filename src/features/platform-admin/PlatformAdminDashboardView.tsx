@@ -14,7 +14,11 @@ import { authService } from "@/services/auth/authService";
 import { createPlatformOrganization, getPlatformOverview } from "@/services/functions/platformAdminService";
 import type { PlatformOverview } from "@/types/platformAdmin";
 
-export function PlatformAdminDashboardView() {
+type PlatformAdminDashboardViewProps = {
+  showOpenOrganizationButton?: boolean;
+};
+
+export function PlatformAdminDashboardView({ showOpenOrganizationButton = true }: PlatformAdminDashboardViewProps) {
   const [data, setData] = useState<PlatformOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -87,13 +91,15 @@ export function PlatformAdminDashboardView() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-2">
-        <Link href={ROUTES.ADMIN_ORGANIZATION}>
-          <Button type="button" variant="outline" size="sm">
-            Open organization admin view
-          </Button>
-        </Link>
-      </div>
+      {showOpenOrganizationButton ? (
+        <div className="flex flex-wrap gap-2">
+          <Link href={ROUTES.ADMIN_ORGANIZATION}>
+            <Button type="button" variant="outline" size="sm">
+              Open organizations
+            </Button>
+          </Link>
+        </div>
+      ) : null}
 
       <Card>
         <CardHeader>
