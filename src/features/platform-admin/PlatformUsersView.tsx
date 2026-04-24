@@ -38,9 +38,9 @@ export function PlatformUsersView() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>SaaS users</CardTitle>
+        <CardTitle>USERS</CardTitle>
         <CardDescription>
-          Platform-wide users across organizations. Manage account access here; org-level staff assignments stay in org dashboards.
+          Platform users across organizations. Manage account access here; org-level staff assignments stay in org dashboards.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -51,7 +51,7 @@ export function PlatformUsersView() {
         </div>
         {error ? <p className="text-sm text-destructive">{error.message}</p> : null}
         {note ? <p className="text-sm text-emerald-700 dark:text-emerald-300">{note}</p> : null}
-        {isLoading ? <LoadingState message="Loading SaaS users..." /> : null}
+        {isLoading ? <LoadingState message="Loading users..." /> : null}
         {!isLoading && users.length === 0 ? (
           <EmptyState title="No users found" description="No memberships found across organizations yet." />
         ) : null}
@@ -63,7 +63,7 @@ export function PlatformUsersView() {
                 <TableHead>UID</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Organizations</TableHead>
-                <TableHead />
+                <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
