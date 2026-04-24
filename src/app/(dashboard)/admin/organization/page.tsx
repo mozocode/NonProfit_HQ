@@ -12,7 +12,7 @@ export default function OrganizationAdminDashboardPage() {
         subtitle="Create and manage customer organizations on the SaaS platform"
         title="Organizations"
       >
-        <PlatformAdminDashboardView showOpenOrganizationButton={false} />
+        <PlatformAdminDashboardView showOpenOrganizationButton={false} showCreateOrganizationCard={true} />
       </AppShell>
     </RoleGate>
   );

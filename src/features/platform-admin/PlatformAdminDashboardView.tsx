@@ -16,9 +16,13 @@ import type { PlatformOverview } from "@/types/platformAdmin";
 
 type PlatformAdminDashboardViewProps = {
   showOpenOrganizationButton?: boolean;
+  showCreateOrganizationCard?: boolean;
 };
 
-export function PlatformAdminDashboardView({ showOpenOrganizationButton = true }: PlatformAdminDashboardViewProps) {
+export function PlatformAdminDashboardView({
+  showOpenOrganizationButton = true,
+  showCreateOrganizationCard = false,
+}: PlatformAdminDashboardViewProps) {
   const [data, setData] = useState<PlatformOverview | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
@@ -101,35 +105,37 @@ export function PlatformAdminDashboardView({ showOpenOrganizationButton = true }
         </div>
       ) : null}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Create organization</CardTitle>
-          <CardDescription>
-            Manually add an organization. This creates the org and assigns your account as an admin member.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="max-w-lg space-y-2">
-            <Label htmlFor="platform-org-name">Organization name</Label>
-            <Input
-              id="platform-org-name"
-              placeholder="New Hope Center"
-              value={organizationName}
-              onChange={(e) => setOrganizationName(e.target.value)}
-            />
-          </div>
-          <Button type="button" disabled={isCreating} onClick={() => void handleCreateOrganization()}>
-            {isCreating ? "Creating..." : "Create organization"}
-          </Button>
-          {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
-          {createNote ? <p className="text-sm text-emerald-700">{createNote}</p> : null}
-          {data.totalOrganizations === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No organizations exist yet. Create your first organization above to start onboarding customers.
-            </p>
-          ) : null}
-        </CardContent>
-      </Card>
+      {showCreateOrganizationCard ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Create organization</CardTitle>
+            <CardDescription>
+              Manually add an organization. This creates the org and assigns your account as an admin member.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="max-w-lg space-y-2">
+              <Label htmlFor="platform-org-name">Organization name</Label>
+              <Input
+                id="platform-org-name"
+                placeholder="New Hope Center"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+              />
+            </div>
+            <Button type="button" disabled={isCreating} onClick={() => void handleCreateOrganization()}>
+              {isCreating ? "Creating..." : "Create organization"}
+            </Button>
+            {createError ? <p className="text-sm text-destructive">{createError}</p> : null}
+            {createNote ? <p className="text-sm text-emerald-700">{createNote}</p> : null}
+            {data.totalOrganizations === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No organizations exist yet. Create your first organization above to start onboarding customers.
+              </p>
+            ) : null}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Card>

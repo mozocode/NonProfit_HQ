@@ -8,7 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 
 export default function HomePage() {
   const router = useRouter();
-  const { isInitialized, isAuthenticated, role } = useAuth();
+  const { isInitialized, isAuthenticated, role, isSuperAdmin } = useAuth();
 
   useEffect(() => {
     if (!isInitialized) return;
@@ -20,10 +20,13 @@ export default function HomePage() {
       router.replace(ROUTES.CREATE_ORGANIZATION);
       return;
     }
-    if (role === "admin") router.replace(ROUTES.ADMIN);
+    if (role === "admin") {
+      if (isSuperAdmin) router.replace(ROUTES.ADMIN);
+      else router.replace(ROUTES.STAFF);
+    }
     else if (role === "staff") router.replace(ROUTES.STAFF);
     else router.replace(ROUTES.PARTICIPANT);
-  }, [isInitialized, isAuthenticated, role, router]);
+  }, [isInitialized, isAuthenticated, role, isSuperAdmin, router]);
 
   return null;
 }

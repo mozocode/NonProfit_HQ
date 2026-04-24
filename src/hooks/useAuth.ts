@@ -4,6 +4,7 @@ import { useCallback } from "react";
 import { useRouter } from "next/navigation";
 
 import { ROUTES } from "@/constants";
+import { isSuperAdminEmail } from "@/lib/superAdmin";
 import { authService } from "@/services/auth/authService";
 import { switchActiveOrganization } from "@/services/functions/orgSwitcherService";
 import { getOrgMembership } from "@/services/firestore/profileService";
@@ -59,6 +60,7 @@ export function useAuth() {
   /** Resolved org: token claim or membership.orgId. */
   const orgId = user?.orgId ?? membership?.orgId ?? null;
   const activeOrganization = organizations.find((org) => org.organizationId === orgId) ?? null;
+  const isSuperAdmin = isSuperAdminEmail(user?.email);
 
   return {
     user,
@@ -66,6 +68,7 @@ export function useAuth() {
     membership,
     organizations,
     activeOrganization,
+    isSuperAdmin,
     role,
     orgId,
     isAuthenticated,
