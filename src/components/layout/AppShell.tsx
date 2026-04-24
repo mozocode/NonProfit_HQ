@@ -48,6 +48,10 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
     { href: "/participant", label: "Participant", icon: LayoutDashboard },
   ];
   const navItems = roleLabel === "Admin" ? adminNav : defaultNav;
+  const activeNavHref =
+    navItems
+      .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
+      .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -104,7 +108,7 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
           <nav className="space-y-1">
             {navItems.map((item) => {
               const Icon = item.icon;
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              const isActive = activeNavHref === item.href;
               return (
               <Link
                 className={cn(
