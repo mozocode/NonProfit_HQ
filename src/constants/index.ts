@@ -11,6 +11,7 @@ export const ROUTES = {
   FORGOT_PASSWORD: "/forgot-password",
   UNAUTHORIZED: "/unauthorized",
   ADMIN: "/admin",
+  ADMIN_ORGANIZATION: "/admin/organization",
   STAFF: "/staff",
   STAFF_FAMILY: (id: string) => `/staff/family/${id}`,
   STAFF_FAMILY_GOAL: (familyId: string, goalId: string) => `/staff/family/${familyId}/goals/${goalId}`,

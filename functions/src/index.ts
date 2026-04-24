@@ -268,6 +268,72 @@ export const switchActiveOrganization = onCall(
   },
 );
 
+type PlatformOrganizationRow = {
+  organizationId: string;
+  name: string;
+  status: "active" | "inactive";
+  activeMembers: number;
+  activeAdmins: number;
+};
+
+type PlatformOverviewResponse = {
+  totalOrganizations: number;
+  activeOrganizations: number;
+  activeMemberships: number;
+  organizations: PlatformOrganizationRow[];
+};
+
+export const getPlatformOverview = onCall(
+  async (request: CallableRequest<Record<string, never>>): Promise<PlatformOverviewResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+    if (request.auth.token.role !== "admin") {
+      throw new HttpsError("permission-denied", "Admin role required.");
+    }
+
+    const organizationsSnap = await db.collection("organizations").get();
+    const membershipsSnap = await db
+      .collection("organizationMemberships")
+      .where("active", "==", true)
+      .get();
+
+    const memberCounts = new Map<string, number>();
+    const adminCounts = new Map<string, number>();
+    for (const m of membershipsSnap.docs) {
+      const data = m.data();
+      const organizationId = String(data.organizationId ?? "");
+      if (!organizationId) continue;
+      memberCounts.set(organizationId, (memberCounts.get(organizationId) ?? 0) + 1);
+      if (data.role === "admin") {
+        adminCounts.set(organizationId, (adminCounts.get(organizationId) ?? 0) + 1);
+      }
+    }
+
+    const organizations: PlatformOrganizationRow[] = organizationsSnap.docs.map((d) => {
+      const data = d.data();
+      const organizationId = String(data.organizationId ?? d.id);
+      const status = data.status === "inactive" ? "inactive" : "active";
+      return {
+        organizationId,
+        name: String(data.name ?? organizationId),
+        status,
+        activeMembers: memberCounts.get(organizationId) ?? 0,
+        activeAdmins: adminCounts.get(organizationId) ?? 0,
+      };
+    });
+
+    organizations.sort((a, b) => a.name.localeCompare(b.name));
+
+    return {
+      totalOrganizations: organizations.length,
+      activeOrganizations: organizations.filter((o) => o.status === "active").length,
+      activeMemberships: membershipsSnap.size,
+      organizations,
+    };
+  },
+);
+
 /** Every 15 min: missing document reminders (first + repeat every 7 days), notify staff; create staff action prompts if reminder unresolved after threshold. */
 export const reminderDispatcher = onSchedule("every 15 minutes", async () => {
   const [missingResult, escalationResult] = await Promise.all([

@@ -2,17 +2,13 @@
 
 import { RoleGate } from "@/components/auth/RoleGate";
 import { AppShell } from "@/components/layout/AppShell";
-import { AdminDashboardView } from "@/features/dashboard/AdminDashboardView";
+import { PlatformAdminDashboardView } from "@/features/platform-admin/PlatformAdminDashboardView";
 
 export default function AdminDashboardPage() {
   return (
     <RoleGate allow={["admin"]}>
-      <AppShell
-        roleLabel="Admin"
-        subtitle="Overview, live activity, staff oversight, and quick links"
-        title="Admin Command Center"
-      >
-        <AdminDashboardView />
+      <AppShell roleLabel="Admin" subtitle="SaaS-level tenant overview and controls" title="Platform Admin">
+        <PlatformAdminDashboardView />
       </AppShell>
     </RoleGate>
   );

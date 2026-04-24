@@ -1,7 +1,19 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { type PropsWithChildren, useState } from "react";
+import {
+  BarChart3,
+  BrainCircuit,
+  Building2,
+  CircleDollarSign,
+  LayoutDashboard,
+  Settings,
+  ShieldCheck,
+  Users,
+  Wrench,
+} from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,9 +28,26 @@ type AppShellProps = PropsWithChildren<{
 }>;
 
 export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps) {
+  const pathname = usePathname();
   const { orgId, organizations, activeOrganization, logout, switchOrganization } = useAuth();
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [switching, setSwitching] = useState(false);
+  const adminNav = [
+    { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/admin/organization", label: "Organizations", icon: Building2 },
+    { href: "/admin/tools/staff", label: "Users", icon: Users },
+    { href: "/admin/reporting", label: "Analytics", icon: BarChart3 },
+    { href: "/admin/weekly-oversight", label: "Business Intelligence", icon: BrainCircuit },
+    { href: "/admin/exports", label: "Revenue", icon: CircleDollarSign },
+    { href: "/admin/tools/organization", label: "Settings", icon: Settings },
+    { href: "/admin/tools", label: "Admin Tools", icon: Wrench },
+  ];
+  const defaultNav = [
+    { href: "/admin", label: "Admin", icon: ShieldCheck },
+    { href: "/staff", label: "Staff", icon: Users },
+    { href: "/participant", label: "Participant", icon: LayoutDashboard },
+  ];
+  const navItems = roleLabel === "Admin" ? adminNav : defaultNav;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -71,22 +100,27 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
 
       <div className="mx-auto grid w-full max-w-7xl grid-cols-12 gap-6 px-6 py-6">
         <aside className="col-span-12 rounded-xl border bg-white p-4 md:col-span-3 lg:col-span-2">
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Main Navigation</p>
           <nav className="space-y-1">
-            {[
-              { href: "/admin", label: "Admin" },
-              { href: "/staff", label: "Staff" },
-              { href: "/participant", label: "Participant" },
-            ].map((item) => (
+            {navItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+              return (
               <Link
                 className={cn(
-                  "block rounded-md px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+                  "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  isActive
+                    ? "bg-emerald-600 text-white shadow-sm hover:bg-emerald-600"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900",
                 )}
                 href={item.href}
                 key={item.href}
               >
+                <Icon className="size-4 shrink-0" />
                 {item.label}
               </Link>
-            ))}
+              );
+            })}
           </nav>
         </aside>
         <main className="col-span-12 md:col-span-9 lg:col-span-10">{children}</main>
