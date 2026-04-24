@@ -2,13 +2,13 @@
 
 import { RoleGate } from "@/components/auth/RoleGate";
 import { AppShell } from "@/components/layout/AppShell";
-import { AdminStaffUsersToolView } from "@/features/admin-tools/AdminStaffUsersToolView";
+import { PlatformUsersView } from "@/features/platform-admin/PlatformUsersView";
 
 export default function AdminToolsStaffPage() {
   return (
     <RoleGate allow={["admin"]}>
-      <AppShell roleLabel="Admin" subtitle="Roles and active memberships" title="Staff & members">
-        <AdminStaffUsersToolView />
+      <AppShell roleLabel="Admin" subtitle="SaaS users, org memberships, and ownership status" title="Users">
+        <PlatformUsersView />
       </AppShell>
     </RoleGate>
   );

@@ -334,6 +334,112 @@ export const getPlatformOverview = onCall(
   },
 );
 
+type PlatformUserOrganization = {
+  organizationId: string;
+  organizationName: string;
+  role: AppRole;
+  isOrganizationOwner: boolean;
+  assignmentType: "owner" | "assigned";
+  invitedByUid: string | null;
+};
+
+type PlatformUserRow = {
+  uid: string;
+  email: string | null;
+  displayName: string | null;
+  organizationCount: number;
+  organizations: PlatformUserOrganization[];
+};
+
+type PlatformUsersResponse = {
+  users: PlatformUserRow[];
+};
+
+export const getPlatformUsers = onCall(
+  async (request: CallableRequest<Record<string, never>>): Promise<PlatformUsersResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+    if (request.auth.token.role !== "admin") {
+      throw new HttpsError("permission-denied", "Admin role required.");
+    }
+
+    const [membershipsSnap, organizationsSnap, profilesSnap] = await Promise.all([
+      db.collection("organizationMemberships").where("active", "==", true).get(),
+      db.collection("organizations").get(),
+      db.collection("profiles").get(),
+    ]);
+
+    const orgById = new Map<
+      string,
+      {
+        name: string;
+        createdBy: string | null;
+      }
+    >();
+    for (const d of organizationsSnap.docs) {
+      const data = d.data();
+      const organizationId = String(data.organizationId ?? d.id);
+      orgById.set(organizationId, {
+        name: String(data.name ?? organizationId),
+        createdBy: typeof data.createdBy === "string" ? data.createdBy : null,
+      });
+    }
+
+    const profileByUid = new Map<string, { email: string | null; displayName: string | null }>();
+    for (const d of profilesSnap.docs) {
+      const data = d.data();
+      profileByUid.set(d.id, {
+        email: typeof data.email === "string" ? data.email : null,
+        displayName: typeof data.displayName === "string" ? data.displayName : null,
+      });
+    }
+
+    const usersMap = new Map<string, PlatformUserRow>();
+    for (const d of membershipsSnap.docs) {
+      const data = d.data();
+      const role = data.role;
+      if (!isAppRole(role)) continue;
+      const uid = String(data.uid ?? "");
+      const organizationId = String(data.organizationId ?? "");
+      if (!uid || !organizationId) continue;
+
+      const org = orgById.get(organizationId);
+      const isOwner = org?.createdBy === uid;
+      const existing = usersMap.get(uid);
+      const base: PlatformUserRow =
+        existing ??
+        {
+          uid,
+          email: profileByUid.get(uid)?.email ?? null,
+          displayName: profileByUid.get(uid)?.displayName ?? null,
+          organizationCount: 0,
+          organizations: [],
+        };
+
+      base.organizations.push({
+        organizationId,
+        organizationName: org?.name ?? organizationId,
+        role,
+        isOrganizationOwner: isOwner,
+        assignmentType: isOwner ? "owner" : "assigned",
+        invitedByUid: typeof data.invitedBy === "string" ? data.invitedBy : null,
+      });
+      base.organizationCount = base.organizations.length;
+      usersMap.set(uid, base);
+    }
+
+    const users = [...usersMap.values()]
+      .map((u) => ({
+        ...u,
+        organizations: u.organizations.sort((a, b) => a.organizationName.localeCompare(b.organizationName)),
+      }))
+      .sort((a, b) => (a.email ?? a.uid).localeCompare(b.email ?? b.uid));
+
+    return { users };
+  },
+);
+
 type CreatePlatformOrganizationPayload = {
   organizationName: string;
   switchToNewOrg?: boolean;
