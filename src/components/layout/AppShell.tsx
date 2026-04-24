@@ -1,10 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { type PropsWithChildren } from "react";
+import { type PropsWithChildren, useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,9 @@ type AppShellProps = PropsWithChildren<{
 }>;
 
 export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps) {
-  const { orgId, logout } = useAuth();
+  const { orgId, organizations, activeOrganization, logout, switchOrganization } = useAuth();
+  const [switchError, setSwitchError] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -28,12 +31,42 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="secondary">{roleLabel}</Badge>
-            <Badge variant="outline">{orgId ?? "No org"}</Badge>
+            <Badge variant="outline">{activeOrganization?.name ?? orgId ?? "No org"}</Badge>
+            {organizations.length > 1 ? (
+              <div className="w-64 space-y-1">
+                <Select
+                  aria-label="Switch organization"
+                  disabled={switching}
+                  options={organizations.map((org) => ({
+                    value: org.organizationId,
+                    label: `${org.name} (${org.role})`,
+                  }))}
+                  value={orgId ?? ""}
+                  onChange={(e) => {
+                    const nextOrgId = e.target.value;
+                    if (!nextOrgId || nextOrgId === orgId) return;
+                    setSwitchError(null);
+                    setSwitching(true);
+                    void switchOrganization(nextOrgId)
+                      .catch((err: unknown) => {
+                        setSwitchError(err instanceof Error ? err.message : "Failed to switch organization.");
+                      })
+                      .finally(() => setSwitching(false));
+                  }}
+                />
+                {switching ? <p className="text-[11px] text-slate-500">Switching organization...</p> : null}
+              </div>
+            ) : null}
             <Button onClick={logout} size="sm" type="button" variant="outline">
               Sign out
             </Button>
           </div>
         </div>
+        {switchError ? (
+          <div className="mx-auto w-full max-w-7xl px-6 pb-3">
+            <p className="text-xs text-destructive">{switchError}</p>
+          </div>
+        ) : null}
       </header>
 
       <div className="mx-auto grid w-full max-w-7xl grid-cols-12 gap-6 px-6 py-6">

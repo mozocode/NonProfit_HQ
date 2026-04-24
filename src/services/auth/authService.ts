@@ -2,7 +2,7 @@ import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
   getIdTokenResult,
-  onAuthStateChanged,
+  onIdTokenChanged,
   updateProfile,
   signInWithEmailAndPassword,
   signOut,
@@ -82,7 +82,8 @@ export const authService = {
         handler(null);
         return;
       }
-      innerUnsub = onAuthStateChanged(auth, (firebaseUser) => {
+      // onIdTokenChanged fires for sign-in/out and token refresh (custom claim updates).
+      innerUnsub = onIdTokenChanged(auth, (firebaseUser) => {
         if (!firebaseUser) {
           handler(null);
           return;

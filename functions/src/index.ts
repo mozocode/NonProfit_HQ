@@ -15,6 +15,12 @@ import { runReportingSnapshots } from "./scheduled/reportingSnapshots";
 const db = getFirestore();
 const auth = getAuth();
 
+type AppRole = "admin" | "staff" | "participant";
+
+function isAppRole(value: unknown): value is AppRole {
+  return value === "admin" || value === "staff" || value === "participant";
+}
+
 function slugifyOrganizationName(value: string): string {
   const base = value
     .trim()
@@ -24,7 +30,7 @@ function slugifyOrganizationName(value: string): string {
   return base || "org";
 }
 
-async function getExistingMembership(uid: string): Promise<{ organizationId: string; role: "admin" | "staff" | "participant" } | null> {
+async function getExistingMembership(uid: string): Promise<{ organizationId: string; role: AppRole } | null> {
   const snap = await db
     .collection("organizationMemberships")
     .where("uid", "==", uid)
@@ -34,10 +40,23 @@ async function getExistingMembership(uid: string): Promise<{ organizationId: str
   if (snap.empty) return null;
   const data = snap.docs[0].data();
   const role = data.role;
-  if (role !== "admin" && role !== "staff" && role !== "participant") return null;
+  if (!isAppRole(role)) return null;
   return {
     organizationId: String(data.organizationId),
     role,
+  };
+}
+
+async function getMembershipForOrg(uid: string, organizationId: string): Promise<{ role: AppRole; active: boolean } | null> {
+  const snap = await db.collection("organizationMemberships").doc(`${organizationId}_${uid}`).get();
+  if (!snap.exists) return null;
+  const data = snap.data();
+  if (!data) return null;
+  const role = data.role;
+  if (!isAppRole(role)) return null;
+  return {
+    role,
+    active: data.active === true,
   };
 }
 
@@ -177,6 +196,75 @@ export const bootstrapOrganizationForCurrentUser = onCall(
     await auth.setCustomUserClaims(uid, { orgId: orgRef.id, role: "admin" });
 
     return { ok: true, organizationId: orgRef.id, role: "admin" };
+  },
+);
+
+type ListMyOrganizationsResponse = {
+  organizations: Array<{
+    organizationId: string;
+    name: string;
+    role: AppRole;
+  }>;
+};
+
+export const listMyOrganizations = onCall(
+  async (request: CallableRequest<Record<string, never>>): Promise<ListMyOrganizationsResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+    const uid = request.auth.uid;
+    const membershipSnap = await db
+      .collection("organizationMemberships")
+      .where("uid", "==", uid)
+      .where("active", "==", true)
+      .get();
+
+    const organizations: ListMyOrganizationsResponse["organizations"] = [];
+    for (const docSnap of membershipSnap.docs) {
+      const data = docSnap.data();
+      if (!isAppRole(data.role)) continue;
+      const organizationId = String(data.organizationId ?? "");
+      if (!organizationId) continue;
+      const orgSnap = await db.collection("organizations").doc(organizationId).get();
+      const orgData = orgSnap.exists ? orgSnap.data() : undefined;
+      organizations.push({
+        organizationId,
+        name: String(orgData?.name ?? organizationId),
+        role: data.role,
+      });
+    }
+
+    organizations.sort((a, b) => a.name.localeCompare(b.name));
+    return { organizations };
+  },
+);
+
+type SwitchActiveOrganizationPayload = {
+  organizationId: string;
+};
+
+type SwitchActiveOrganizationResponse = {
+  ok: true;
+  organizationId: string;
+  role: AppRole;
+};
+
+export const switchActiveOrganization = onCall(
+  async (request: CallableRequest<SwitchActiveOrganizationPayload>): Promise<SwitchActiveOrganizationResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+    const uid = request.auth.uid;
+    const organizationId = String(request.data.organizationId ?? "").trim();
+    if (!organizationId) {
+      throw new HttpsError("invalid-argument", "organizationId is required.");
+    }
+    const membership = await getMembershipForOrg(uid, organizationId);
+    if (!membership || !membership.active) {
+      throw new HttpsError("permission-denied", "No active membership for this organization.");
+    }
+    await auth.setCustomUserClaims(uid, { orgId: organizationId, role: membership.role });
+    return { ok: true, organizationId, role: membership.role };
   },
 );
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, type PropsWithChildren } from "react";
 
 import { PageSpinner } from "@/components/ui/page-spinner";
 import { authService } from "@/services/auth/authService";
+import { listMyOrganizations } from "@/services/functions/orgSwitcherService";
 import { getOrgMembership, getUserProfile } from "@/services/firestore/profileService";
 import { useSessionStore } from "@/store/sessionStore";
 
@@ -17,26 +18,30 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const setSession = useSessionStore((s) => s.setSession);
   const setProfile = useSessionStore((s) => s.setProfile);
   const setMembership = useSessionStore((s) => s.setMembership);
+  const setOrganizations = useSessionStore((s) => s.setOrganizations);
   const setInitialized = useSessionStore((s) => s.setInitialized);
   const clearSession = useSessionStore((s) => s.clearSession);
 
   const bootstrapUser = useCallback(
     async (uid: string, orgId: string | null) => {
       try {
-        const [profile, membership] = await Promise.all([
+        const [profile, membership, organizations] = await Promise.all([
           getUserProfile(uid),
           orgId ? getOrgMembership(orgId, uid) : Promise.resolve(null),
+          listMyOrganizations(),
         ]);
         setProfile(profile ?? null);
         setMembership(membership ?? null);
+        setOrganizations(organizations);
       } catch {
         setProfile(null);
         setMembership(null);
+        setOrganizations([]);
       } finally {
         setInitialized(true);
       }
     },
-    [setProfile, setMembership, setInitialized],
+    [setProfile, setMembership, setOrganizations, setInitialized],
   );
 
   useEffect(() => {

@@ -27,10 +27,17 @@ export type OrgMembership = {
   joinedAt: string;
 };
 
+export type UserOrganization = {
+  organizationId: string;
+  name: string;
+  role: AppRole;
+};
+
 export type SessionState = {
   initialized: boolean;
   isAuthenticated: boolean;
   user: AuthUser | null;
   profile: UserProfile | null;
   membership: OrgMembership | null;
+  organizations: UserOrganization[];
 };
