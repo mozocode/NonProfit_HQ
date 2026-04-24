@@ -26,6 +26,7 @@ type AppShellProps = PropsWithChildren<{
   subtitle: string;
   roleLabel: string;
 }>;
+const INTERNAL_ORGANIZATION_IDS = new Set(["org_demo"]);
 
 function resolveActiveAdminNav(pathname: string): string {
   if (pathname === "/admin/tools/organization" || pathname.startsWith("/admin/tools/organization/")) return "/admin/tools/organization";
@@ -64,6 +65,9 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
     roleLabel === "Admin"
       ? resolveActiveAdminNav(pathname)
       : navItems.find((item) => pathname === item.href || pathname.startsWith(item.href + "/"))?.href ?? null;
+  const activeOrgIsInternal = orgId ? INTERNAL_ORGANIZATION_IDS.has(orgId) : false;
+  const hasOrgChoiceForCurrentContext = organizations.some((org) => org.organizationId === orgId);
+  const showOrgSwitcher = organizations.length > 1 || (organizations.length > 0 && !hasOrgChoiceForCurrentContext);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -76,8 +80,8 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="secondary">{roleLabel}</Badge>
-            <Badge variant="outline">{activeOrganization?.name ?? orgId ?? "No org"}</Badge>
-            {organizations.length > 1 ? (
+            <Badge variant="outline">{activeOrgIsInternal ? "Platform" : activeOrganization?.name ?? orgId ?? "No org"}</Badge>
+            {showOrgSwitcher ? (
               <div className="w-64 space-y-1">
                 <Select
                   aria-label="Switch organization"
@@ -86,7 +90,7 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
                     value: org.organizationId,
                     label: `${org.name} (${org.role})`,
                   }))}
-                  value={orgId ?? ""}
+                  value={hasOrgChoiceForCurrentContext ? orgId ?? "" : ""}
                   onChange={(e) => {
                     const nextOrgId = e.target.value;
                     if (!nextOrgId || nextOrgId === orgId) return;

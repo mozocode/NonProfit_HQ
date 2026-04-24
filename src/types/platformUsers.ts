@@ -13,6 +13,7 @@ export type PlatformUserRow = {
   uid: string;
   email: string | null;
   displayName: string | null;
+  isDisabled: boolean;
   organizationCount: number;
   organizations: PlatformUserOrganization[];
 };

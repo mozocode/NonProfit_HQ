@@ -233,7 +233,7 @@ export const listMyOrganizations = onCall(
       const data = docSnap.data();
       if (!isAppRole(data.role)) continue;
       const organizationId = String(data.organizationId ?? "");
-      if (!organizationId) continue;
+      if (!organizationId || INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
       const orgSnap = await db.collection("organizations").doc(organizationId).get();
       const orgData = orgSnap.exists ? orgSnap.data() : undefined;
       organizations.push({
@@ -361,6 +361,7 @@ type PlatformUserRow = {
   uid: string;
   email: string | null;
   displayName: string | null;
+  isDisabled: boolean;
   organizationCount: number;
   organizations: PlatformUserOrganization[];
 };
@@ -428,6 +429,7 @@ export const getPlatformUsers = onCall(
           uid,
           email: profileByUid.get(uid)?.email ?? null,
           displayName: profileByUid.get(uid)?.displayName ?? null,
+          isDisabled: false,
           organizationCount: 0,
           organizations: [],
         };
@@ -444,6 +446,17 @@ export const getPlatformUsers = onCall(
       usersMap.set(uid, base);
     }
 
+    const userIds = [...usersMap.keys()];
+    for (let i = 0; i < userIds.length; i += 100) {
+      const chunk = userIds.slice(i, i + 100);
+      const userRecords = await auth.getUsers(chunk.map((uid) => ({ uid })));
+      for (const record of userRecords.users) {
+        const row = usersMap.get(record.uid);
+        if (!row) continue;
+        row.isDisabled = record.disabled === true;
+      }
+    }
+
     const users = [...usersMap.values()]
       .map((u) => ({
         ...u,
@@ -452,6 +465,88 @@ export const getPlatformUsers = onCall(
       .sort((a, b) => (a.email ?? a.uid).localeCompare(b.email ?? b.uid));
 
     return { users };
+  },
+);
+
+type SetPlatformUserDisabledPayload = {
+  uid: string;
+  disabled: boolean;
+};
+
+async function assertCanMutatePlatformUser(targetUid: string, actorUid: string): Promise<void> {
+  if (targetUid === actorUid) {
+    throw new HttpsError("failed-precondition", "You cannot modify your own super-admin account.");
+  }
+  const userRecord = await auth.getUser(targetUid);
+  const email = String(userRecord.email ?? "")
+    .trim()
+    .toLowerCase();
+  if (SUPER_ADMIN_EMAILS.has(email)) {
+    throw new HttpsError("failed-precondition", "You cannot modify another super-admin account.");
+  }
+
+  const adminMemberships = await db
+    .collection("organizationMemberships")
+    .where("uid", "==", targetUid)
+    .where("active", "==", true)
+    .where("role", "==", "admin")
+    .get();
+
+  for (const adminMembership of adminMemberships.docs) {
+    const organizationId = String(adminMembership.data().organizationId ?? "");
+    if (!organizationId || INTERNAL_ORGANIZATION_IDS.has(organizationId)) continue;
+    const peerAdmins = await db
+      .collection("organizationMemberships")
+      .where("organizationId", "==", organizationId)
+      .where("active", "==", true)
+      .where("role", "==", "admin")
+      .limit(2)
+      .get();
+
+    if (peerAdmins.size <= 1) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Cannot modify this user because they are the only active admin for organization ${organizationId}.`,
+      );
+    }
+  }
+}
+
+export const setPlatformUserDisabled = onCall(
+  async (request: CallableRequest<SetPlatformUserDisabledPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    if (!isSuperAdminRequest(request)) throw new HttpsError("permission-denied", "Super admin required.");
+
+    const targetUid = String(request.data.uid ?? "").trim();
+    const disabled = request.data.disabled === true;
+    if (!targetUid) throw new HttpsError("invalid-argument", "uid is required.");
+
+    await assertCanMutatePlatformUser(targetUid, request.auth.uid);
+    await auth.updateUser(targetUid, { disabled });
+
+    return { ok: true };
+  },
+);
+
+type DeletePlatformUserPayload = {
+  uid: string;
+};
+
+export const deletePlatformUser = onCall(
+  async (request: CallableRequest<DeletePlatformUserPayload>): Promise<{ ok: true }> => {
+    if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required.");
+    if (!isSuperAdminRequest(request)) throw new HttpsError("permission-denied", "Super admin required.");
+
+    const targetUid = String(request.data.uid ?? "").trim();
+    if (!targetUid) throw new HttpsError("invalid-argument", "uid is required.");
+
+    await assertCanMutatePlatformUser(targetUid, request.auth.uid);
+
+    await deleteCollectionByQuery(db.collection("organizationMemberships").where("uid", "==", targetUid));
+    await db.collection("profiles").doc(targetUid).delete();
+    await auth.deleteUser(targetUid);
+
+    return { ok: true };
   },
 );
 
