@@ -15,6 +15,32 @@ import { runReportingSnapshots } from "./scheduled/reportingSnapshots";
 const db = getFirestore();
 const auth = getAuth();
 
+function slugifyOrganizationName(value: string): string {
+  const base = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return base || "org";
+}
+
+async function getExistingMembership(uid: string): Promise<{ organizationId: string; role: "admin" | "staff" | "participant" } | null> {
+  const snap = await db
+    .collection("organizationMemberships")
+    .where("uid", "==", uid)
+    .where("active", "==", true)
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
+  const data = snap.docs[0].data();
+  const role = data.role;
+  if (role !== "admin" && role !== "staff" && role !== "participant") return null;
+  return {
+    organizationId: String(data.organizationId),
+    role,
+  };
+}
+
 export const authOnCreate = authV1.user().onCreate(async (user) => {
   await db.collection("profiles").doc(user.uid).set(
     {
@@ -66,6 +92,91 @@ export const setOrgUserClaims = onCall<SetOrgClaimsPayload>(
       );
 
     return { ok: true };
+  },
+);
+
+type BootstrapOrganizationPayload = {
+  organizationName: string;
+};
+
+type BootstrapOrganizationResponse = {
+  ok: true;
+  organizationId: string;
+  role: "admin";
+};
+
+export const bootstrapOrganizationForCurrentUser = onCall(
+  async (request: CallableRequest<BootstrapOrganizationPayload>): Promise<BootstrapOrganizationResponse> => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required.");
+    }
+
+    const uid = request.auth.uid;
+    const orgName = String(request.data.organizationName ?? "").trim();
+    if (orgName.length < 2) {
+      throw new HttpsError("invalid-argument", "Organization name must be at least 2 characters.");
+    }
+    if (orgName.length > 120) {
+      throw new HttpsError("invalid-argument", "Organization name is too long.");
+    }
+
+    const existing = await getExistingMembership(uid);
+    if (existing) {
+      if (existing.role === "admin") {
+        await auth.setCustomUserClaims(uid, { orgId: existing.organizationId, role: "admin" });
+        return { ok: true, organizationId: existing.organizationId, role: "admin" };
+      }
+      throw new HttpsError("already-exists", "User already belongs to an organization.");
+    }
+
+    const slug = slugifyOrganizationName(orgName);
+    const slugDocRef = db.collection("organizationSlugs").doc(slug);
+    const orgRef = db.collection("organizations").doc();
+    const membershipRef = db.collection("organizationMemberships").doc(`${orgRef.id}_${uid}`);
+
+    await db.runTransaction(async (tx) => {
+      const slugSnap = await tx.get(slugDocRef);
+      if (slugSnap.exists) {
+        throw new HttpsError("already-exists", "Organization name is already in use.");
+      }
+      tx.create(slugDocRef, {
+        slug,
+        organizationId: orgRef.id,
+        createdAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+      });
+      tx.create(orgRef, {
+        organizationId: orgRef.id,
+        name: orgName,
+        status: "active",
+        settings: {},
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        createdBy: uid,
+      });
+      tx.create(membershipRef, {
+        organizationId: orgRef.id,
+        uid,
+        role: "admin",
+        active: true,
+        programIds: [],
+        invitedBy: null,
+        joinedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      tx.set(
+        db.collection("profiles").doc(uid),
+        {
+          updatedAt: FieldValue.serverTimestamp(),
+          lastActiveAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    });
+
+    await auth.setCustomUserClaims(uid, { orgId: orgRef.id, role: "admin" });
+
+    return { ok: true, organizationId: orgRef.id, role: "admin" };
   },
 );
 

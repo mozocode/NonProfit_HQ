@@ -129,6 +129,12 @@ export function LoginForm() {
           <Button className="w-full" disabled={formState.isSubmitting} type="submit">
             {formState.isSubmitting ? "Signing in..." : "Sign in"}
           </Button>
+          <p className="text-center text-sm text-slate-600">
+            New organization?{" "}
+            <Link className="underline hover:text-slate-900" href={ROUTES.SIGN_UP}>
+              Create a workspace
+            </Link>
+          </p>
         </form>
       </CardContent>
     </Card>

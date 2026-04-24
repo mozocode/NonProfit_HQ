@@ -18,6 +18,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/organizationMemberships/$(organizationId + '_' + currentUid());
     }
 
+    function membershipPathForUid(organizationId, uid) {
+      return /databases/$(database)/documents/organizationMemberships/$(organizationId + '_' + uid);
+    }
+
     function isActiveMember(organizationId) {
       return isSignedIn()
         && orgId() == organizationId
@@ -41,6 +45,21 @@ service cloud.firestore {
       return isActiveMember(organizationId) && role() == 'participant';
     }
 
+    function isStaffOrAdmin(organizationId) {
+      return isActiveMember(organizationId) && (role() == 'staff' || role() == 'admin');
+    }
+
+    function canReadProfile(uid) {
+      return isSignedIn() && (
+        uid == currentUid() ||
+        (
+          isStaffOrAdmin(orgId()) &&
+          exists(membershipPathForUid(orgId(), uid)) &&
+          get(membershipPathForUid(orgId(), uid)).data.active == true
+        )
+      );
+    }
+
     function docOrganizationId() {
       return resource.data.organizationId != null ? resource.data.organizationId : resource.data.orgId;
     }
@@ -61,7 +80,8 @@ service cloud.firestore {
 
     // ---- Global (no tenant) ----
     match /profiles/{uid} {
-      allow read, write: if isSignedIn() && uid == currentUid();
+      allow read: if canReadProfile(uid);
+      allow write: if isSignedIn() && uid == currentUid();
     }
 
     // ---- Core ----

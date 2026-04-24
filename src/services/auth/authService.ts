@@ -1,7 +1,9 @@
 import { FirebaseError } from "firebase/app";
 import {
+  createUserWithEmailAndPassword,
   getIdTokenResult,
   onAuthStateChanged,
+  updateProfile,
   signInWithEmailAndPassword,
   signOut,
   type Auth,
@@ -40,11 +42,29 @@ async function mapUser(user: User): Promise<AuthUser> {
 }
 
 export const authService = {
+  async signUp(email: string, password: string, displayName?: string): Promise<AuthUser> {
+    await ensureFirebaseAppAsync();
+    const auth = guardAuth();
+    const result = await createUserWithEmailAndPassword(auth, email, password);
+    const nextDisplayName = displayName?.trim();
+    if (nextDisplayName) {
+      await updateProfile(result.user, { displayName: nextDisplayName });
+    }
+    return mapUser(result.user);
+  },
   async login(email: string, password: string): Promise<AuthUser> {
     await ensureFirebaseAppAsync();
     const auth = guardAuth();
     const result = await signInWithEmailAndPassword(auth, email, password);
     return mapUser(result.user);
+  },
+  async refreshSessionClaims(): Promise<AuthUser | null> {
+    await ensureFirebaseAppAsync();
+    const auth = getFirebaseAuth();
+    const user = auth?.currentUser;
+    if (!user) return null;
+    await user.getIdToken(true);
+    return mapUser(user);
   },
   async logout(): Promise<void> {
     await ensureFirebaseAppAsync();

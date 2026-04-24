@@ -1,5 +1,6 @@
 import { type FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
 import { getAuth, type Auth } from "firebase/auth";
+import { getFunctions, type Functions } from "firebase/functions";
 import { getFirestore, type Firestore } from "firebase/firestore";
 import { getStorage, type FirebaseStorage } from "firebase/storage";
 
@@ -71,4 +72,9 @@ export function getFirestoreDb(): Firestore | null {
 export function getFirebaseStorageInstance(): FirebaseStorage | null {
   const app = resolveFirebaseApp();
   return app ? getStorage(app) : null;
+}
+
+export function getFirebaseFunctions(): Functions | null {
+  const app = resolveFirebaseApp();
+  return app ? getFunctions(app) : null;
 }

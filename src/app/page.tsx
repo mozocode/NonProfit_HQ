@@ -16,6 +16,10 @@ export default function HomePage() {
       router.replace(ROUTES.LOGIN);
       return;
     }
+    if (!role) {
+      router.replace(ROUTES.CREATE_ORGANIZATION);
+      return;
+    }
     if (role === "admin") router.replace(ROUTES.ADMIN);
     else if (role === "staff") router.replace(ROUTES.STAFF);
     else router.replace(ROUTES.PARTICIPANT);

@@ -13,14 +13,18 @@ import { useAuth } from "@/hooks/useAuth";
  */
 export function AuthGuard({ children }: PropsWithChildren) {
   const router = useRouter();
-  const { isInitialized, isAuthenticated } = useAuth();
+  const { isInitialized, isAuthenticated, role, orgId } = useAuth();
 
   useEffect(() => {
     if (!isInitialized) return;
     if (!isAuthenticated) {
       router.replace(ROUTES.LOGIN);
+      return;
     }
-  }, [isInitialized, isAuthenticated, router]);
+    if (!role || !orgId) {
+      router.replace(ROUTES.CREATE_ORGANIZATION);
+    }
+  }, [isInitialized, isAuthenticated, role, orgId, router]);
 
   if (!isInitialized) {
     return (
@@ -30,7 +34,7 @@ export function AuthGuard({ children }: PropsWithChildren) {
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !role || !orgId) {
     return null;
   }
 
