@@ -27,6 +27,18 @@ type AppShellProps = PropsWithChildren<{
   roleLabel: string;
 }>;
 
+function resolveActiveAdminNav(pathname: string): string {
+  if (pathname === "/admin/tools/organization" || pathname.startsWith("/admin/tools/organization/")) return "/admin/tools/organization";
+  if (pathname === "/admin/tools/staff" || pathname.startsWith("/admin/tools/staff/")) return "/admin/tools/staff";
+  if (pathname === "/admin/organization" || pathname.startsWith("/admin/organization/")) return "/admin/organization";
+  if (pathname === "/admin/reporting" || pathname.startsWith("/admin/reporting/")) return "/admin/reporting";
+  if (pathname === "/admin/weekly-oversight" || pathname.startsWith("/admin/weekly-oversight/")) return "/admin/weekly-oversight";
+  if (pathname === "/admin/exports" || pathname.startsWith("/admin/exports/")) return "/admin/exports";
+  if (pathname === "/admin/tools" || pathname.startsWith("/admin/tools/")) return "/admin/tools";
+  if (pathname === "/admin" || pathname.startsWith("/admin/")) return "/admin";
+  return "/admin";
+}
+
 export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps) {
   const pathname = usePathname();
   const { orgId, organizations, activeOrganization, logout, switchOrganization } = useAuth();
@@ -49,9 +61,9 @@ export function AppShell({ title, subtitle, roleLabel, children }: AppShellProps
   ];
   const navItems = roleLabel === "Admin" ? adminNav : defaultNav;
   const activeNavHref =
-    navItems
-      .filter((item) => pathname === item.href || pathname.startsWith(item.href + "/"))
-      .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
+    roleLabel === "Admin"
+      ? resolveActiveAdminNav(pathname)
+      : navItems.find((item) => pathname === item.href || pathname.startsWith(item.href + "/"))?.href ?? null;
 
   return (
     <div className="min-h-screen bg-slate-50">
